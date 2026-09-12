@@ -43,7 +43,6 @@ interface EventRosterResponse {
 
 export default function EventArchive() {
   const { data: session } = useSession();
-  const isAuthorized = session?.user?.name === "Joachim Chiebuka Ihedioha" || session?.user?.name === "Ihedioha Joachim Chiebuka";
   const userRole = ((session?.user as any)?.ruolo || "").toLowerCase();
   const userName = (session?.user?.name || "").toLowerCase();
   const userEmail = (session?.user?.email || "").toLowerCase();

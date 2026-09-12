@@ -39,19 +39,14 @@ const handler = NextAuth({
         token.accessToken = account.access_token;
       }
       
-      // Quando l'utente fa il login per la prima volta, user e profile sono definiti
-      if (user || profile) {
       // Quando l'utente fa il login o se il ruolo non è ancora presente
       if (user || profile || !token.ruolo) {
         const email = user?.email || profile?.email || profile?.preferred_username || token.email || "";
-        token.email = email;
         if (email) token.email = email;
         
         // Fetch user role from FastAPI backend
         try {
           const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-          const res = await fetch(`${apiUrl}/api/soci/${email}`);
-          // Try exact email first
           let res = await fetch(`${apiUrl}/api/soci/${email}`);
           
           // Se ha punti (es. nome.cognome) ma a DB non ci sono, prova anche la versione pulita
