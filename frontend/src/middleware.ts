@@ -12,15 +12,22 @@ export default withAuth(
     }
 
     // Rotte riservate al Board o Responsabili
+    // Rotte riservate al Board, Responsabili, Manager e Co-Manager
     const ruolo = (user?.ruolo as string)?.toLowerCase() || "";
     const area_lavoro = (user?.area_lavoro as string)?.toLowerCase() || "";
     const email = (user?.email as string)?.toLowerCase() || "";
+    const name = (user?.name as string)?.toLowerCase() || "";
 
     const isBoardOrResponsabile = 
       ruolo.includes("board") || 
       ruolo.includes("responsabile") ||
       ruolo.includes("manager") ||
+      ruolo.includes("co-manager") ||
+      ruolo.includes("co manager") ||
+      ruolo.includes("comanager") ||
       ruolo === "co" ||
+      ruolo.includes("presidente") ||
+      ruolo.includes("tesoriere") ||
       ruolo.includes("segretario generale") ||
       area_lavoro.includes("board") ||
       area_lavoro.includes("responsabile") ||
@@ -28,6 +35,9 @@ export default withAuth(
       area_lavoro.includes("it ") ||
       email === "board@jemore.it" || 
       email === "responsabili@jemore.it";
+      email === "responsabili@jemore.it" ||
+      email.includes("joachim") ||
+      name.includes("joachim");
 
     if (!isBoardOrResponsabile) {
       // Restituisce 403 Forbidden o reindirizza a una pagina di errore 403
