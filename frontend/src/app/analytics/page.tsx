@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Search, Filter, ArrowUpDown, AlertCircle, AlertTriangle, CheckCircle, Loader2, Users, FileSpreadsheet, ShieldAlert, Database } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
 interface MemberAnalytics {
   socio_id: number;
@@ -60,7 +61,7 @@ export default function MemberAnalyticsPage() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("http://localhost:8000/api/members/import", {
+      const res = await fetch(`${API_BASE_URL}/api/members/import`, {
         method: "POST",
         body: formData,
       });
@@ -93,7 +94,7 @@ export default function MemberAnalyticsPage() {
     setImportResult(null);
 
     try {
-      const res = await fetch("http://localhost:8000/api/members/sync-postgres", {
+      const res = await fetch(`${API_BASE_URL}/api/members/sync-postgres`, {
         method: "POST",
       });
 
@@ -130,7 +131,7 @@ export default function MemberAnalyticsPage() {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch("http://localhost:8000/api/members/analytics");
+      const res = await fetch(`${API_BASE_URL}/api/members/analytics`);
       if (!res.ok) throw new Error("Errore durante il recupero dei dati analitici");
       const data = await res.json();
       setAnalytics(data);

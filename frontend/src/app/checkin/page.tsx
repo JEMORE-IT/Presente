@@ -4,6 +4,7 @@ import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { getAuthHeaders } from "@/lib/msal";
+import { API_BASE_URL } from "@/lib/api";
 import { Button } from "@/components/atoms/Button/Button";
 import {
   UserCheck,
@@ -51,7 +52,7 @@ function CheckInContent() {
       if (!eventIdParam) return;
       try {
         setEventLoading(true);
-        const res = await fetch(`http://localhost:8000/api/events/${eventIdParam}`);
+        const res = await fetch(`${API_BASE_URL}/api/events/${eventIdParam}`);
         if (res.ok) {
           const data = await res.json();
           setEventInfo(data);
@@ -67,7 +68,7 @@ function CheckInContent() {
 
     const loadRegistry = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/streaks");
+        const res = await fetch(`${API_BASE_URL}/api/streaks`);
         if (res.ok) {
           const data = await res.json();
           const list: RegistryMember[] = data.map((m: any) => ({
@@ -106,7 +107,7 @@ function CheckInContent() {
     try {
       const tokenStr = searchParams?.get("token") || "";
       const token = (session as any)?.idToken;
-      const res = await fetch("http://localhost:8000/api/checkin", {
+      const res = await fetch(`${API_BASE_URL}/api/checkin`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { X, FileText, Download } from "lucide-react";
 import { Button } from "@/components/atoms/Button/Button";
+import { API_BASE_URL } from "@/lib/api";
 import { MinutesExportModalProps } from "./MinutesExportModal.types";
 
 export const MinutesExportModal: React.FC<MinutesExportModalProps> = ({
@@ -17,7 +18,7 @@ export const MinutesExportModal: React.FC<MinutesExportModalProps> = ({
 
   const handleExport = (format: "pdf" | "csv") => {
     const quorumValue = quorumPct / 100;
-    const downloadUrl = `http://localhost:8000/api/events/${eventId}/export-minutes/${format}?quorum_pct=${quorumValue}`;
+    const downloadUrl = `${API_BASE_URL}/api/events/${eventId}/export-minutes/${format}?quorum_pct=${quorumValue}`;
     // Trigger download in a new tab or iframe
     window.open(downloadUrl, "_blank");
   };

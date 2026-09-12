@@ -7,6 +7,7 @@ import { Search, Filter, Calendar, FileText, ChevronDown, ChevronUp, Loader2, Us
 import { Button } from "@/components/atoms/Button/Button";
 import { StatusBadge } from "@/components/atoms/StatusBadge/StatusBadge";
 import { MinutesExportModal } from "@/components/organisms/MinutesExportModal/MinutesExportModal";
+import { API_BASE_URL } from "@/lib/api";
 
 interface Evento {
   id: number;
@@ -80,7 +81,7 @@ export default function EventArchive() {
     }
     
     try {
-      const res = await fetch(`http://localhost:8000/api/events/${eventId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${(session as any)?.idToken || ""}`
@@ -105,7 +106,7 @@ export default function EventArchive() {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch("http://localhost:8000/api/events");
+      const res = await fetch(`${API_BASE_URL}/api/events`);
       if (!res.ok) throw new Error("Errore nel caricamento degli eventi");
       const data = await res.json();
       setEvents(data);
@@ -128,7 +129,7 @@ export default function EventArchive() {
     setLoadingRoster(true);
 
     try {
-      const res = await fetch(`http://localhost:8000/api/events/${eventId}/roster`);
+      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/roster`);
       if (!res.ok) throw new Error("Errore nel caricamento del roster dell'evento");
       const data = await res.json();
       setRosterData(data);
@@ -160,7 +161,7 @@ export default function EventArchive() {
 
     try {
       setCreating(true);
-      const res = await fetch("http://localhost:8000/api/events", {
+      const res = await fetch(`${API_BASE_URL}/api/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

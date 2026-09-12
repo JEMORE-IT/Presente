@@ -3,6 +3,7 @@ import { LiveRosterTableProps, RosterMember } from "./LiveRosterTable.types";
 import { StatusBadge } from "../../atoms/StatusBadge/StatusBadge";
 import { Search, AlertTriangle, UserCheck, Wifi, ShieldCheck, Loader2, UserMinus, X } from "lucide-react";
 import { Select } from "../../atoms/Select/Select";
+import { API_BASE_URL } from "@/lib/api";
 
 export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
   members,
@@ -25,7 +26,7 @@ export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
     // Fetch soci list when component mounts (or when modal is opened, but here is fine for now)
     async function fetchSoci() {
       try {
-        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api/soci");
+        const res = await fetch(`${API_BASE_URL}/api/soci`);
         if (res.ok) {
           const data = await res.json();
           setSociOptions(data.map((s: any) => ({

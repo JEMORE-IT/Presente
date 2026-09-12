@@ -8,6 +8,7 @@ import { QrProjectorModal } from "@/components/organisms/QrProjectorModal/QrProj
 import { MinutesExportModal } from "@/components/organisms/MinutesExportModal/MinutesExportModal";
 import { Button } from "@/components/atoms/Button/Button";
 import { Users, UserCheck, Calendar, UserX, AlertCircle, PlusCircle, QrCode, Upload, FileText, X } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
 interface Evento {
   id: number;
@@ -38,7 +39,7 @@ export default function Dashboard() {
       setError("");
 
       // Fetch events
-      const eventsRes = await fetch("http://localhost:8000/api/events");
+      const eventsRes = await fetch(`${API_BASE_URL}/api/events`);
       if (!eventsRes.ok) throw new Error("Errore nel recupero degli eventi");
       const eventsData = await eventsRes.json();
       setEvents(eventsData);
@@ -48,13 +49,16 @@ export default function Dashboard() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlEventId = urlParams.get("event_id");
         if (urlEventId && eventsData.some((evt: any) => evt.id === Number(urlEventId))) {
-          if (selectedEventId !== Number(urlEventId)) setSelectedEventId(Number(urlEventId));
+          setSelectedEventId(Number(urlEventId));
         } else {
-          if (selectedEventId !== eventsData[0].id) setSelectedEventId(eventsData[0].id);
+          // Find first active or just first event
+          const activeEvt = eventsData.find((evt: any) => evt.is_attivo) || eventsData[0];
+          setSelectedEventId(activeEvt.id);
         }
       }
     } catch (err: any) {
-      setError(err.message || "Errore nel caricamento degli eventi");
+      console.error(err);
+      setError("Impossibile caricare i dati del server");
     } finally {
       setLoading(false);
     }
@@ -63,7 +67,7 @@ export default function Dashboard() {
   const fetchEventRoster = async (eventId: number) => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:8000/api/events/${eventId}/roster`);
+      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/roster`);
       if (!res.ok) throw new Error("Errore nel recupero roster dell'evento");
       const data = await res.json();
       // Map "status" from API to "attendance_status" for the frontend
@@ -121,7 +125,7 @@ export default function Dashboard() {
 
   // SSE subscription for live check-in events
   useEffect(() => {
-    const sse = new EventSource("http://localhost:8000/api/live");
+    const sse = new EventSource(`${API_BASE_URL}/api/live`);
 
     sse.onmessage = (event) => {
       try {
@@ -211,7 +215,7 @@ export default function Dashboard() {
     );
 
     try {
-      const res = await fetch("http://localhost:8000/api/checkin/manual", {
+      const res = await fetch(`${API_BASE_URL}/api/checkin/manual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -248,7 +252,7 @@ export default function Dashboard() {
 
     try {
       setError("");
-      const res = await fetch(`http://localhost:8000/api/events/${selectedEventId}/import-pre-assembly`, {
+      const res = await fetch(`${API_BASE_URL}/api/events/${selectedEventId}/import-pre-assembly`, {
         method: "POST",
         body: formData,
       });
@@ -278,7 +282,7 @@ export default function Dashboard() {
 
     try {
       setError("");
-      const res = await fetch(`http://localhost:8000/api/events/${selectedEventId}/import-teams`, {
+      const res = await fetch(`${API_BASE_URL}/api/events/${selectedEventId}/import-teams`, {
         method: "POST",
         body: formData,
       });

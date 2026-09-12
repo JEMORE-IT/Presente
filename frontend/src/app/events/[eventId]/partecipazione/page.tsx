@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { ShieldAlert, AlertCircle, X, FileUp, CheckCircle2 } from "lucide-react";
 import { Select } from "@/components/atoms/Select/Select";
+import { API_BASE_URL } from "@/lib/api";
 
 export default function PartecipazioneForm({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
@@ -36,7 +37,7 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
   useEffect(() => {
     async function fetchSoci() {
       try {
-        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api/soci");
+        const res = await fetch(`${API_BASE_URL}/api/soci`);
         if (res.ok) {
           const data = await res.json();
           setSoci(data.map((s: any) => ({
@@ -75,7 +76,7 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
         if (file) formData.append("file", file);
       }
       
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/events/${eventId}/delega`, {
+      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/delega`, {
         method: "POST",
         body: formData,
       });

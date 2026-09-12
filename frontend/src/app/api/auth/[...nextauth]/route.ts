@@ -46,7 +46,8 @@ const handler = NextAuth({
         
         // Fetch user role from FastAPI backend
         try {
-          const res = await fetch(`http://localhost:8000/api/soci/${email}`);
+          const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          const res = await fetch(`${apiUrl}/api/soci/${email}`);
           if (res.ok) {
             const data = await res.json();
             token.ruolo = data.ruolo;

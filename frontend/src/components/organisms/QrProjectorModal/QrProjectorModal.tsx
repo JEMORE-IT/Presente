@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { QrProjectorModalProps } from "./QrProjectorModal.types";
 import { X, Smartphone, Copy, Check } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
 export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
   isOpen,
@@ -23,7 +24,7 @@ export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
 
     const generateUrl = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/events/${eventId}/qr`);
+        const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/qr`);
         if (res.ok) {
           const data = await res.json();
           const origin =

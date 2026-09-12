@@ -1,6 +1,7 @@
 import asyncio
 import json
 import io
+import os
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, Security, UploadFile, File, Form
@@ -44,9 +45,17 @@ seed_database_if_empty()
 app = FastAPI(title="Presente! API", version="1.0.0")
 
 # Enable CORS for Next.js frontend
+cors_env = os.getenv("CORS_ORIGINS", "")
+allowed_origins = [
+    "http://localhost:3000",
+    "https://presente.jemore.it",
+]
+if cors_env:
+    allowed_origins.extend([o.strip() for o in cors_env.split(",") if o.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Deve essere esplicito se allow_credentials=True
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
