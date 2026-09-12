@@ -626,3 +626,9 @@ def list_soci(db: Session = Depends(get_db)):
     """
     soci = db.query(models.Socio).filter(models.Socio.stato == "ATTIVO").order_by(models.Socio.nome.asc()).all()
     return [{"id": s.id, "nome": s.nome, "email": s.email} for s in soci]
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+
