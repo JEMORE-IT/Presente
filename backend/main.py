@@ -17,8 +17,13 @@ from auth import get_current_user, generate_qr_token, verify_qr_token, DEV_MODE
 import services
 from postgres_sync import sync_soci_from_postgres
 
-# Initialize DB tables
-Base.metadata.create_all(bind=engine)
+# Initialize DB tables safely
+def init_db():
+    try:
+        Base.metadata.create_all(bind=engine)
+        seed_database_if_empty()
+    except Exception as e:
+        print(f"Warning: Database initialization encountered an issue: {e}")
 
 # Initial roster seed if soci table is empty
 def seed_database_if_empty():
@@ -40,7 +45,7 @@ def seed_database_if_empty():
     finally:
         db.close()
 
-seed_database_if_empty()
+init_db()
 
 app = FastAPI(title="Presente! API", version="1.0.0")
 
@@ -128,6 +133,10 @@ def startup_db_seed():
 @app.get("/")
 def read_root():
     return {"message": "Presente! API is running", "dev_mode": DEV_MODE}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "time": datetime.utcnow().isoformat()}
 
 # --- Event Endpoints ---
 

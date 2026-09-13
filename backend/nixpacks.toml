@@ -1,5 +1,6 @@
 [variables]
 NIXPACKS_PYTHON_VERSION = "3.12"
+PYTHONPATH = "/app:/app/backend:."
 
 [phases.install]
 cmds = [
