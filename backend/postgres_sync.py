@@ -17,8 +17,8 @@ def sync_soci_from_postgres(db: Session, postgres_url: str = None):
     print(f"Attempting to sync soci from PostgreSQL: {url.split('@')[-1]}") # Log without credentials
     
     try:
-        # Connect to Postgres
-        conn = psycopg2.connect(url)
+        # Connect to Postgres with explicit 3-second timeout
+        conn = psycopg2.connect(url, connect_timeout=3)
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         # Read from prospetto_soci

@@ -102,14 +102,17 @@ class CheckinPayload(BaseModel):
     modalita: Optional[str] = "IN_PRESENZA"
     token: Optional[str] = None
 
-# Automatic database seeding on startup if empty
-@app.on_event("startup")
-def startup_db_seed():
+# Automatic database seeding in background without blocking server startup
+def _do_startup_seed():
     db = SessionLocal()
     try:
         # 1. Attempt to sync from PostgreSQL first
         print("Starting up... Attempting to sync members from PostgreSQL.")
-        sync_result = sync_soci_from_postgres(db)
+        try:
+            sync_result = sync_soci_from_postgres(db)
+            print(f"Postgres sync result: {sync_result}")
+        except Exception as e:
+            print(f"PostgreSQL sync skipped on startup: {e}")
         
         # 2. If Postgres failed and DB is completely empty, fallback to CSV seed
         count = db.query(models.Socio).count()
@@ -127,8 +130,16 @@ def startup_db_seed():
                 print("Could not find CSV file to seed database.")
         else:
             print(f"Database has {count} members.")
+    except Exception as e:
+        print(f"Startup seed warning: {e}")
     finally:
         db.close()
+
+@app.on_event("startup")
+async def startup_db_seed():
+    # Run in background executor so FastAPI boots IMMEDIATELY in milliseconds
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _do_startup_seed)
 
 @app.get("/")
 def read_root():
