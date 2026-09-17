@@ -1,28 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Clock } from "lucide-react";
+import React from "react";
+import { X } from "lucide-react";
 import { AssembleaAnnouncementModalProps } from "./AssembleaAnnouncementModal.types";
 
 export const AssembleaAnnouncementModal: React.FC<AssembleaAnnouncementModalProps> = ({
   isOpen,
   onClose,
   eventTitle,
-  onDeclare,
+  announcedTime,
 }) => {
-  const getInitialTime = () => {
-    const now = new Date();
-    return now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-  };
-
-  const [openingTime, setOpeningTime] = useState(getInitialTime);
-
   if (!isOpen) return null;
 
-  const handleConfirm = () => {
-    onDeclare(openingTime);
-    onClose();
-  };
+  const displayTime =
+    announcedTime ||
+    new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -38,11 +30,11 @@ export const AssembleaAnnouncementModal: React.FC<AssembleaAnnouncementModalProp
         <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-4">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-yellow-500/10 text-yellow-500 rounded-xl">
-              <Clock className="h-5 w-5 text-yellow-500" />
+              <span className="text-xl">🔨</span>
             </div>
             <div>
               <h3 className="text-base font-bold text-white">
-                Apertura Assemblea
+                Inizio Assemblea
               </h3>
               <p className="text-xs text-zinc-400 truncate max-w-[200px]">
                 {eventTitle}
@@ -58,38 +50,23 @@ export const AssembleaAnnouncementModal: React.FC<AssembleaAnnouncementModalProp
         </div>
 
         {/* Content */}
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1.5">
-              Orario di Apertura:
-            </label>
-            <input
-              type="time"
-              value={openingTime}
-              onChange={(e) => setOpeningTime(e.target.value)}
-              className="w-full px-4 py-2.5 text-lg font-bold rounded-xl border border-zinc-700 bg-zinc-950 text-white focus:outline-none focus:ring-1 focus:ring-yellow-500 text-center"
-            />
-          </div>
-          <p className="text-xs text-zinc-400">
-            L'orario verrà registrato per la verbalizzazione dell'inizio dell'assemblea.
+        <div className="py-4 text-center space-y-3">
+          <p className="text-sm font-medium text-zinc-300">
+            Assemblea iniziata alle
           </p>
+          <div className="text-3xl sm:text-4xl font-black text-yellow-400 font-mono tracking-wider py-3 px-6 bg-zinc-950 border border-zinc-800 rounded-2xl inline-block shadow-inner">
+            {displayTime}
+          </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-2.5 pt-5 border-t border-zinc-800 mt-5">
+        {/* Footer Action */}
+        <div className="pt-4 border-t border-zinc-800 mt-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+            className="w-full py-2.5 text-xs font-bold rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 transition-colors cursor-pointer"
           >
-            Annulla
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            className="px-4 py-2 text-xs font-bold rounded-xl bg-yellow-500 hover:bg-yellow-400 text-zinc-950 transition-colors"
-          >
-            Conferma Orario
+            Chiudi
           </button>
         </div>
       </div>

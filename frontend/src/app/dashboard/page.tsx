@@ -53,11 +53,13 @@ export default function Dashboard() {
     }
   }, [selectedEventId]);
 
-  const handleDeclareAssembly = (time: string) => {
-    setAnnouncedAt(time);
+  const handleDeclareAssembly = () => {
+    const timeStr = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    setAnnouncedAt(timeStr);
     if (selectedEventId && typeof window !== "undefined") {
-      localStorage.setItem(`assemblea_announcement_${selectedEventId}`, JSON.stringify({ time }));
+      localStorage.setItem(`assemblea_announcement_${selectedEventId}`, JSON.stringify({ time: timeStr }));
     }
+    setIsAnnouncementModalOpen(true);
   };
 
   // Fetch events only (roster is fetched per event)
@@ -398,15 +400,15 @@ export default function Dashboard() {
                   Assemblea Iniziata
                 </span>
                 <span className="text-sm font-semibold text-white">
-                  Apertura dichiarata alle ore <span className="text-yellow-500 font-bold">{announcedAt}</span>
+                  Assemblea iniziata alle ore <span className="text-yellow-500 font-bold">{announcedAt}</span>
                 </span>
               </div>
             </div>
             <button
               onClick={() => setIsAnnouncementModalOpen(true)}
-              className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg transition-colors font-medium self-start sm:self-auto shrink-0 shadow-sm"
+              className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg transition-colors font-medium self-start sm:self-auto shrink-0 shadow-sm cursor-pointer"
             >
-              Modifica Orario
+              Visualizza Orario
             </button>
           </div>
         )}
@@ -570,7 +572,7 @@ export default function Dashboard() {
                 )}
 
                 <button
-                  onClick={() => setIsAnnouncementModalOpen(true)}
+                  onClick={handleDeclareAssembly}
                   className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-xs font-bold transition-colors cursor-pointer"
                 >
                   <span>🔨</span>
@@ -664,7 +666,7 @@ export default function Dashboard() {
           isOpen={isAnnouncementModalOpen}
           onClose={() => setIsAnnouncementModalOpen(false)}
           eventTitle={selectedEvent.titolo}
-          onDeclare={handleDeclareAssembly}
+          announcedTime={announcedAt}
         />
       )}
 
