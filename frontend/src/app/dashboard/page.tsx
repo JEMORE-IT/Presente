@@ -508,22 +508,13 @@ export default function Dashboard() {
               </button>
 
               {selectedEvent.tipo === "ASSEMBLEA" && (
-                <>
-                  <button
-                    onClick={() => setIsAnnouncementModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full font-sans text-sm font-bold transition-colors shadow-sm"
-                  >
-                    <span>🔨</span>
-                    Dichiara Inizio
-                  </button>
-                  <button
-                    onClick={() => setIsExportOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-full border border-green-600 cursor-pointer font-sans text-sm font-semibold transition-colors shadow-sm"
-                  >
-                    <FileText className="h-4 w-4" />
-                    Esporta Verbale
-                  </button>
-                </>
+                <button
+                  onClick={() => setIsExportOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-full border border-green-600 cursor-pointer font-sans text-sm font-semibold transition-colors shadow-sm"
+                >
+                  <FileText className="h-4 w-4" />
+                  Esporta Verbale
+                </button>
               )}
 
             </div>
