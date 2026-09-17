@@ -73,10 +73,16 @@ export default function EventArchive() {
   const [exportEventTitle, setExportEventTitle] = useState("");
   
   // Event Creation Modal state
+  const getInitialDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
+  };
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState("FORMAZIONE");
   const [newModality, setNewModality] = useState("HYBRID");
+  const [newDateTime, setNewDateTime] = useState(getInitialDateTime);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -177,6 +183,7 @@ export default function EventArchive() {
           titolo: newTitle,
           tipo: newType,
           modalita: newModality,
+          data_ora: newDateTime ? new Date(newDateTime).toISOString() : new Date().toISOString(),
           soglia_consecutiva: 3, 
         }),
       });
@@ -185,6 +192,7 @@ export default function EventArchive() {
       const createdEvent = await res.json();
 
       setNewTitle("");
+      setNewDateTime(getInitialDateTime());
       setShowCreateForm(false);
       
       // Redirect to the dashboard for the new event
@@ -589,7 +597,7 @@ export default function EventArchive() {
                   </select>
                 </div>
 
-                <div className="space-y-1 md:col-span-2">
+                <div className="space-y-1">
                   <label className="text-xs font-bold text-gray-500 uppercase">Modalità</label>
                   <select
                     value={newModality}
@@ -600,6 +608,17 @@ export default function EventArchive() {
                     <option value="IN_PRESENZA">In Presenza</option>
                     <option value="ONLINE">Online</option>
                   </select>
+                </div>
+
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Data e Ora Evento</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={newDateTime}
+                    onChange={(e) => setNewDateTime(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                  />
                 </div>
               </div>
 
