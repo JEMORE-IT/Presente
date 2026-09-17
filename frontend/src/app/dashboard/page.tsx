@@ -542,13 +542,26 @@ export default function Dashboard() {
 
               <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
                 {isQuorumReached ? (
-                  <div className="px-3.5 py-1.5 rounded-full text-xs font-bold border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                    <span>QUORUM RAGGIUNTO ({currentQuorumCount}/{quorumTarget})</span>
+                  <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm font-mono">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                    <span className="text-xs font-bold uppercase tracking-wider font-sans mr-1">Quorum:</span>
+                    <span className="text-xl sm:text-2xl font-black text-emerald-300 leading-none">
+                      {currentQuorumCount}
+                    </span>
+                    <span className="text-emerald-500/70 font-bold text-base leading-none">/</span>
+                    <span className="text-emerald-400 font-bold text-base leading-none">
+                      {quorumTarget}
+                    </span>
                   </div>
                 ) : (
-                  <div className="text-sm font-bold text-zinc-300 font-mono px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl">
-                    {currentQuorumCount} / {quorumTarget}
+                  <div className="flex items-center gap-1.5 px-4 py-1.5 bg-zinc-800/90 border border-zinc-700 rounded-xl font-mono shadow-sm">
+                    <span className="text-xl sm:text-2xl font-black text-yellow-400 leading-none">
+                      {currentQuorumCount}
+                    </span>
+                    <span className="text-zinc-500 font-bold text-base leading-none">/</span>
+                    <span className="text-zinc-300 font-bold text-base leading-none">
+                      {quorumTarget}
+                    </span>
                   </div>
                 )}
 
