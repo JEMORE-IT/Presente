@@ -1,20 +1,25 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from sqlalchemy.orm import Session
 import models
 
-# Default Postgres URL if not provided in environment
-DEFAULT_POSTGRES_URL = "postgresql://angelo:root@20.224.62.14:5432/jemore_db"
+load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 def sync_soci_from_postgres(db: Session, postgres_url: str = None):
     """
     Connects to the external PostgreSQL database, reads the 'prospetto_soci' table,
     and upserts the records into the local SQLite 'soci' table.
     """
-    url = postgres_url or os.environ.get("POSTGRES_SYNC_URL", DEFAULT_POSTGRES_URL)
+    url = postgres_url or os.environ.get("POSTGRES_SYNC_URL", "")
+    if not url:
+        print("Warning: POSTGRES_SYNC_URL environment variable is not set. Skipping Postgres sync.")
+        return {"status": "error", "message": "POSTGRES_SYNC_URL non configurato"}
     
-    print(f"Attempting to sync soci from PostgreSQL: {url.split('@')[-1]}") # Log without credentials
+    print(f"Attempting to sync soci from PostgreSQL: {url.split('@')[-1] if '@' in url else 'configured-url'}")
     
     try:
         # Connect to Postgres with explicit 3-second timeout

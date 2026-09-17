@@ -2,6 +2,12 @@ import asyncio
 import json
 import io
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file from backend or root directory
+load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, Security, UploadFile, File, Form
