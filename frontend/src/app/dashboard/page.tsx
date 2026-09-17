@@ -6,8 +6,7 @@ import { LiveRosterTable } from "@/components/organisms/LiveRosterTable/LiveRost
 import { KpiCard } from "@/components/molecules/KpiCard/KpiCard";
 import { QrProjectorModal } from "@/components/organisms/QrProjectorModal/QrProjectorModal";
 import { MinutesExportModal } from "@/components/organisms/MinutesExportModal/MinutesExportModal";
-import { Button } from "@/components/atoms/Button/Button";
-import { Users, UserCheck, Calendar, UserX, AlertCircle, PlusCircle, QrCode, Upload, FileText, X, CheckCircle2, Sparkles, Megaphone } from "lucide-react";
+import { Users, UserCheck, Calendar, UserX, AlertCircle, QrCode, Upload, FileText, X, CheckCircle2 } from "lucide-react";
 import { AssembleaAnnouncementModal } from "@/components/organisms/AssembleaAnnouncementModal/AssembleaAnnouncementModal";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -35,7 +34,6 @@ export default function Dashboard() {
 
   // Announcement state (Dichiarazione Inizio Assemblea)
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
-  const [announcedPhrase, setAnnouncedPhrase] = useState<string | null>(null);
   const [announcedAt, setAnnouncedAt] = useState<string | null>(null);
 
   // Load any previously declared announcement for the selected event
@@ -45,25 +43,20 @@ export default function Dashboard() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          setAnnouncedPhrase(parsed.phrase);
-          setAnnouncedAt(parsed.time);
+          setAnnouncedAt(parsed.time || parsed.phrase || null);
         } catch {
-          setAnnouncedPhrase(null);
           setAnnouncedAt(null);
         }
       } else {
-        setAnnouncedPhrase(null);
         setAnnouncedAt(null);
       }
     }
   }, [selectedEventId]);
 
-  const handleDeclareAssembly = (phrase: string) => {
-    const timeStr = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-    setAnnouncedPhrase(phrase);
-    setAnnouncedAt(timeStr);
+  const handleDeclareAssembly = (time: string) => {
+    setAnnouncedAt(time);
     if (selectedEventId && typeof window !== "undefined") {
-      localStorage.setItem(`assemblea_announcement_${selectedEventId}`, JSON.stringify({ phrase, time: timeStr }));
+      localStorage.setItem(`assemblea_announcement_${selectedEventId}`, JSON.stringify({ time }));
     }
   };
 
@@ -363,6 +356,7 @@ export default function Dashboard() {
   ).length;
 
   // Quorum calculation (50% + 1 of active members)
+  // Quorum reaches 100% when reaching half the members + 1 (quorumTarget)
   // Quorum includes: in-presence, online, and absent/excused members who delegated (delega_a)
   const totalVotingMembers = activeMembers.length > 0 ? activeMembers.length : members.length;
   const quorumTarget = Math.floor(totalVotingMembers / 2) + 1;
@@ -375,14 +369,7 @@ export default function Dashboard() {
 
   const currentQuorumCount = validQuorumMembers.length;
   const isQuorumReached = currentQuorumCount >= quorumTarget && totalVotingMembers > 0;
-  const missingQuorumCount = Math.max(0, quorumTarget - currentQuorumCount);
-  const quorumPercentage = totalVotingMembers > 0 ? Math.min(100, Math.round((currentQuorumCount / totalVotingMembers) * 100)) : 0;
-  const quorumTargetPercentage = totalVotingMembers > 0 ? Math.round((quorumTarget / totalVotingMembers) * 100) : 51;
-  const delegatedOnlyCount = activeMembers.filter((m) => 
-    m.attendance_status !== "IN_PRESENZA" && 
-    m.attendance_status !== "ONLINE" && 
-    Boolean(m.delega_a && m.delega_a.trim() !== "" && m.delega_a !== "null")
-  ).length;
+  const quorumProgressPct = quorumTarget > 0 ? Math.min(100, Math.round((currentQuorumCount / quorumTarget) * 100)) : 0;
 
   const selectedEvent = events.find((e) => e.id === selectedEventId);
 
@@ -397,32 +384,25 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Declared Assembly Announcement Banner */}
-        {announcedPhrase && selectedEvent?.tipo === "ASSEMBLEA" && (
-          <div className="bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-blue-500/15 border border-amber-500/40 dark:border-amber-400/30 rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Declared Assembly Announcement Banner - Flat solid colors, no gradients */}
+        {announcedAt && selectedEvent?.tipo === "ASSEMBLEA" && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-3xl">🔨</span>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider bg-amber-500 text-black px-2.5 py-0.5 rounded-full">
-                    Assemblea Ufficialmente Iniziata
-                  </span>
-                  {announcedAt && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                      Ore {announcedAt}
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white mt-1 italic">
-                  "{announcedPhrase}"
-                </p>
+              <span className="text-2xl">🔨</span>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="text-xs font-bold uppercase tracking-wider bg-yellow-500 text-zinc-950 px-2.5 py-0.5 rounded-full">
+                  Assemblea Iniziata
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  Apertura dichiarata alle ore <span className="text-yellow-500 font-bold">{announcedAt}</span>
+                </span>
               </div>
             </div>
             <button
               onClick={() => setIsAnnouncementModalOpen(true)}
-              className="text-xs px-3 py-1.5 bg-white dark:bg-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-zinc-700 rounded-lg transition-colors font-medium self-start sm:self-auto shrink-0 shadow-sm"
+              className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg transition-colors font-medium self-start sm:self-auto shrink-0 shadow-sm"
             >
-              Cambia Gag / Annuncio
+              Modifica Orario
             </button>
           </div>
         )}
@@ -531,7 +511,7 @@ export default function Dashboard() {
                 <>
                   <button
                     onClick={() => setIsAnnouncementModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-full border border-amber-500 cursor-pointer font-sans text-sm font-semibold transition-all shadow-sm hover:shadow-amber-500/20"
+                    className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full font-sans text-sm font-bold transition-colors shadow-sm"
                   >
                     <span>🔨</span>
                     Dichiara Inizio
@@ -552,15 +532,11 @@ export default function Dashboard() {
 
         {/* Assemblea Quorum Progress Bar */}
         {selectedEvent?.tipo === "ASSEMBLEA" && (
-          <section className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
             {/* Header with status badge and button */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl border ${
-                  isQuorumReached 
-                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]" 
-                    : "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                }`}>
+                <div className="p-2.5 rounded-xl border border-zinc-800 bg-zinc-800/60 text-yellow-500">
                   <span className="text-2xl">🏛️</span>
                 </div>
                 <div>
@@ -568,91 +544,40 @@ export default function Dashboard() {
                     Quorum Costitutivo Assemblea (50% + 1)
                   </h2>
                   <p className="text-xs text-zinc-400">
-                    Soglia statutaria: <strong>{quorumTarget} voti validi</strong> su {totalVotingMembers} soci aventi diritto (presenti in presenza + online + deleghe).
+                    Soglia statutaria: <strong>{quorumTarget} soci</strong> su {totalVotingMembers} aventi diritto (presenti in presenza + online + deleghe).
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
-                <div className={`px-3.5 py-1.5 rounded-full text-xs font-bold border flex items-center gap-2 transition-all ${
-                  isQuorumReached
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.25)] animate-pulse"
-                    : "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                }`}>
-                  {isQuorumReached ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                      <span>QUORUM RAGGIUNTO ({currentQuorumCount}/{quorumTarget})</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                      <span>MANCANO {missingQuorumCount} VOTI ({currentQuorumCount}/{quorumTarget})</span>
-                    </>
-                  )}
-                </div>
+                {isQuorumReached ? (
+                  <div className="px-3.5 py-1.5 rounded-full text-xs font-bold border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    <span>QUORUM RAGGIUNTO ({currentQuorumCount}/{quorumTarget})</span>
+                  </div>
+                ) : (
+                  <div className="text-sm font-bold text-zinc-300 font-mono px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-xl">
+                    {currentQuorumCount} / {quorumTarget}
+                  </div>
+                )}
 
                 <button
                   onClick={() => setIsAnnouncementModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white rounded-full text-xs font-bold shadow-lg shadow-emerald-950/40 transition-all hover:scale-[1.02] cursor-pointer"
+                  className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-xs font-bold transition-colors cursor-pointer"
                 >
                   <span>🔨</span>
-                  <span>Dichiara Inizio Assemblea</span>
+                  <span>Dichiara Inizio</span>
                 </button>
               </div>
             </div>
 
-            {/* Progress Bar Track with 50%+1 Notch */}
-            <div className="space-y-2 pt-1">
-              <div className="relative w-full h-6 bg-zinc-800/90 rounded-full overflow-hidden border border-zinc-700 p-0.5 shadow-inner">
-                {/* 50%+1 Target Marker Notch */}
+            {/* Progress Bar (reaches 100% at quorumTarget) */}
+            <div className="pt-1">
+              <div className="w-full h-4 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
                 <div
-                  className="absolute top-0 bottom-0 w-1 bg-white z-10 shadow-[0_0_8px_rgba(255,255,255,0.9)]"
-                  style={{ left: `${Math.min(99, Math.max(1, quorumTargetPercentage))}%` }}
-                  title={`Target Quorum 50%+1: ${quorumTarget} soci`}
+                  className="h-full bg-yellow-500 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${quorumProgressPct}%` }}
                 />
-                
-                {/* Progress Fill */}
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ease-out ${
-                    isQuorumReached
-                      ? "bg-gradient-to-r from-emerald-500 via-emerald-400 to-green-300 shadow-[0_0_20px_rgba(16,185,129,0.5)]"
-                      : "bg-gradient-to-r from-blue-600 via-blue-500 to-amber-500"
-                  }`}
-                  style={{ width: `${Math.max(2, quorumPercentage)}%` }}
-                />
-              </div>
-
-              {/* Progress Labels */}
-              <div className="flex items-center justify-between text-xs text-zinc-400 px-1 font-medium">
-                <span>0 voti</span>
-                <span className="text-zinc-200 flex items-center gap-1.5 font-bold">
-                  <span className="inline-block w-2 h-2 rounded-full bg-white shadow-sm"></span>
-                  Soglia 50%+1: {quorumTarget} soci ({quorumTargetPercentage}%)
-                </span>
-                <span>{totalVotingMembers} soci ({quorumPercentage}% raggiunto)</span>
-              </div>
-            </div>
-
-            {/* Breakdown details */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-zinc-800 text-xs">
-              <div className="p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-800/80 flex items-center justify-between">
-                <span className="text-zinc-400">🏢 In Presenza:</span>
-                <strong className="text-emerald-400 text-sm">{presentInPersonCount}</strong>
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-800/80 flex items-center justify-between">
-                <span className="text-zinc-400">💻 Online:</span>
-                <strong className="text-blue-400 text-sm">{presentOnlineCount}</strong>
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-800/80 flex items-center justify-between">
-                <span className="text-zinc-400">📝 Con Delega Valida:</span>
-                <strong className="text-amber-400 text-sm">{delegatedOnlyCount}</strong>
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-800/80 flex items-center justify-between">
-                <span className="text-zinc-400">👥 Voti Validi Totali:</span>
-                <strong className={`text-sm ${isQuorumReached ? "text-emerald-300 font-bold" : "text-zinc-200"}`}>
-                  {currentQuorumCount} / {quorumTarget}
-                </strong>
               </div>
             </div>
           </section>
@@ -725,15 +650,12 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Assemblea Announcement / Gag Modal */}
+      {/* Assemblea Announcement Modal */}
       {selectedEvent && (
         <AssembleaAnnouncementModal
           isOpen={isAnnouncementModalOpen}
           onClose={() => setIsAnnouncementModalOpen(false)}
           eventTitle={selectedEvent.titolo}
-          currentCount={currentQuorumCount}
-          quorumNeeded={quorumTarget}
-          isQuorumReached={isQuorumReached}
           onDeclare={handleDeclareAssembly}
         />
       )}
