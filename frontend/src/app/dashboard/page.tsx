@@ -390,208 +390,198 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Declared Assembly Announcement Banner - Flat solid colors, no gradients */}
-        {announcedAt && selectedEvent?.tipo === "ASSEMBLEA" && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🔨</span>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="text-xs font-bold uppercase tracking-wider bg-yellow-500 text-zinc-950 px-2.5 py-0.5 rounded-full">
-                  Assemblea Iniziata
+        {/* Unified Event & Assembly Dashboard Header */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-sm space-y-5">
+          {/* Row 1: Event Selector & Action Buttons */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                Evento Selezionato:
+              </span>
+              {events.length > 0 ? (
+                <select
+                  value={selectedEventId || ""}
+                  onChange={(e) => setSelectedEventId(Number(e.target.value))}
+                  className="px-3 py-1.5 border border-zinc-700 rounded-xl bg-zinc-950 text-sm font-semibold text-white focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                >
+                  {events.map((evt) => (
+                    <option key={evt.id} value={evt.id}>
+                      {evt.titolo} ({evt.tipo} - {evt.modalita})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-sm font-medium text-zinc-500 italic">
+                  Nessun evento attivo. Creane uno per iniziare.
                 </span>
-                <span className="text-sm font-semibold text-white">
-                  Assemblea iniziata alle ore <span className="text-yellow-500 font-bold">{announcedAt}</span>
-                </span>
-              </div>
+              )}
             </div>
-            <button
-              onClick={() => setIsAnnouncementModalOpen(true)}
-              className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg transition-colors font-medium self-start sm:self-auto shrink-0 shadow-sm cursor-pointer"
-            >
-              Visualizza Orario
-            </button>
-          </div>
-        )}
 
-        {/* Selected Event details & Selection bar */}
-        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
-            <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Evento Selezionato:
-            </span>
-            {events.length > 0 ? (
-              <select
-                value={selectedEventId || ""}
-                onChange={(e) => setSelectedEventId(Number(e.target.value))}
-                className="px-3 py-1.5 border border-gray-300 dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-950 text-sm font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {events.map((evt) => (
-                  <option key={evt.id} value={evt.id}>
-                    {evt.titolo} ({evt.tipo} - {evt.modalita})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="text-sm font-medium text-gray-400 dark:text-gray-500 italic">Nessun evento attivo. Creane uno per iniziare.</span>
+            {selectedEvent && (
+              <div className="flex flex-wrap items-center gap-2.5">
+                {selectedEvent.tipo === "ASSEMBLEA" ? (
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsImportDropdownOpen(!isImportDropdownOpen)}
+                      className="flex items-center gap-2 px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-full border border-zinc-700 text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Raccolta Dati
+                    </button>
+
+                    {isImportDropdownOpen && (
+                      <div className="absolute top-full right-0 sm:left-0 mt-2 w-64 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                        <label className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 cursor-pointer text-xs font-medium text-zinc-300 transition-colors border-b border-zinc-800">
+                          <Upload className="h-4 w-4 text-blue-400" />
+                          Importa Forms (CSV)
+                          <input
+                            type="file"
+                            accept=".csv"
+                            className="hidden"
+                            onChange={(e) => {
+                              setIsImportDropdownOpen(false);
+                              handleCsvUpload(e);
+                            }}
+                          />
+                        </label>
+                        <button
+                          onClick={() => {
+                            setIsImportDropdownOpen(false);
+                            const link = `${window.location.origin}/events/${selectedEvent.id}/partecipazione`;
+                            navigator.clipboard.writeText(link);
+                            alert("Link univoco per il modulo di partecipazione copiato negli appunti:\n" + link);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 cursor-pointer text-xs font-medium text-zinc-300 transition-colors text-left"
+                        >
+                          <FileText className="h-4 w-4 text-green-400" />
+                          Copia Link (Form Interno)
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : selectedEvent.modalita === "ONLINE" || selectedEvent.modalita === "ONLINE_ONLY" ? (
+                  <label className="flex items-center gap-2 px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-full border border-zinc-700 text-xs font-semibold cursor-pointer transition-colors">
+                    <Upload className="h-3.5 w-3.5" />
+                    Importa Teams (CSV)
+                    <input
+                      type="file"
+                      accept=".csv"
+                      className="hidden"
+                      onChange={handleTeamsUpload}
+                    />
+                  </label>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const link = `${window.location.origin}/events/${selectedEvent.id}/partecipazione`;
+                      navigator.clipboard.writeText(link);
+                      alert("Link univoco per il modulo di partecipazione copiato negli appunti:\n" + link);
+                    }}
+                    className="flex items-center gap-2 px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-full border border-zinc-700 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    Crea Link (Form)
+                  </button>
+                )}
+
+                {/* Proietta QR */}
+                <button
+                  onClick={() => setIsQrOpen(true)}
+                  className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  <QrCode className="h-3.5 w-3.5" />
+                  Proietta QR
+                </button>
+
+                {selectedEvent.tipo === "ASSEMBLEA" && (
+                  <button
+                    onClick={() => setIsExportOpen(true)}
+                    className="flex items-center gap-2 px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Esporta Verbale
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
-          {selectedEvent && (
-            <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-gray-500 dark:text-gray-400">
+          {/* Row 2: Assembly Quorum & Status (integrated inside the same card) */}
+          {selectedEvent?.tipo === "ASSEMBLEA" && (
+            <div className="pt-4 border-t border-zinc-800 space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl border border-zinc-800 bg-zinc-800/60 text-yellow-500 shrink-0">
+                    <span className="text-xl">🏛️</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h2 className="text-base font-bold text-white tracking-tight">
+                        Quorum Costitutivo Assemblea (50% + 1)
+                      </h2>
+                      {announcedAt && (
+                        <button
+                          onClick={() => setIsAnnouncementModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 transition-colors cursor-pointer"
+                        >
+                          <span>🔨</span>
+                          Assemblea iniziata alle {announcedAt}
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Soglia statutaria: <strong>{quorumTarget} soci</strong> su {totalVotingMembers} aventi diritto (preregistrati + deleghe).
+                    </p>
+                  </div>
+                </div>
 
-              {selectedEvent.tipo === "ASSEMBLEA" ? (
-                <div className="relative">
-                  <button
-                    onClick={() => setIsImportDropdownOpen(!isImportDropdownOpen)}
-                    className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 rounded-full border border-gray-300 dark:border-zinc-700 cursor-pointer font-sans text-sm font-semibold transition-colors shadow-sm"
-                  >
-                    <Upload className="h-4 w-4" />
-                    Raccolta Dati
-                  </button>
-                  
-                  {isImportDropdownOpen && (
-                    <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-lg z-50 overflow-hidden">
-                      <label className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors border-b border-gray-100 dark:border-zinc-800">
-                        <Upload className="h-4 w-4 text-blue-500" />
-                        Importa Forms (CSV)
-                        <input
-                          type="file"
-                          accept=".csv"
-                          className="hidden"
-                          onChange={(e) => {
-                             setIsImportDropdownOpen(false);
-                             handleCsvUpload(e);
-                          }}
-                        />
-                      </label>
-                      <button
-                        onClick={() => {
-                          setIsImportDropdownOpen(false);
-                          const link = `${window.location.origin}/events/${selectedEvent.id}/partecipazione`;
-                          navigator.clipboard.writeText(link);
-                          alert("Link univoco per il modulo di partecipazione copiato negli appunti:\n" + link);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors text-left"
-                      >
-                        <FileText className="h-4 w-4 text-green-500" />
-                        Copia Link (Form Interno)
-                      </button>
+                <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
+                  {isQuorumReached ? (
+                    <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm font-mono">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                      <span className="text-xs font-bold uppercase tracking-wider font-sans mr-1">Quorum:</span>
+                      <span className="text-xl sm:text-2xl font-black text-emerald-300 leading-none">
+                        {currentQuorumCount}
+                      </span>
+                      <span className="text-emerald-500/70 font-bold text-base leading-none">/</span>
+                      <span className="text-emerald-400 font-bold text-base leading-none">
+                        {quorumTarget}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-4 py-1.5 bg-zinc-800/90 border border-zinc-700 rounded-xl font-mono shadow-sm">
+                      <span className="text-xl sm:text-2xl font-black text-yellow-400 leading-none">
+                        {currentQuorumCount}
+                      </span>
+                      <span className="text-zinc-500 font-bold text-base leading-none">/</span>
+                      <span className="text-lg sm:text-xl text-zinc-300 font-bold leading-none">
+                        {quorumTarget}
+                      </span>
                     </div>
                   )}
+
+                  <button
+                    onClick={handleDeclareAssembly}
+                    className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-xs font-bold transition-colors cursor-pointer shadow-sm"
+                  >
+                    <span>🔨</span>
+                    <span>Dichiara Inizio</span>
+                  </button>
                 </div>
-              ) : selectedEvent.modalita === "ONLINE" || selectedEvent.modalita === "ONLINE_ONLY" ? (
-                <label className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 rounded-full border border-gray-300 dark:border-zinc-700 cursor-pointer font-sans text-sm font-semibold transition-colors shadow-sm">
-                  <Upload className="h-4 w-4" />
-                  Importa Teams (CSV)
-                  <input
-                    type="file"
-                    accept=".csv"
-                    className="hidden"
-                    onChange={handleTeamsUpload}
+              </div>
+
+              {/* Progress Bar (reaches 100% at quorumTarget) */}
+              <div className="pt-0.5">
+                <div className="w-full h-3.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                  <div
+                    className="h-full bg-yellow-500 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${quorumProgressPct}%` }}
                   />
-                </label>
-              ) : (
-                <button
-                  onClick={() => {
-                    const link = `${window.location.origin}/events/${selectedEvent.id}/partecipazione`;
-                    navigator.clipboard.writeText(link);
-                    alert("Link univoco per il modulo di partecipazione copiato negli appunti:\n" + link);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 rounded-full border border-gray-300 dark:border-zinc-700 cursor-pointer font-sans text-sm font-semibold transition-colors shadow-sm"
-                >
-                  <Upload className="h-4 w-4" />
-                  Crea Link (Form)
-                </button>
-              )}
-
-              {/* Proietta QR — visible here, relative to the selected event */}
-              <button
-                onClick={() => setIsQrOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full border border-blue-600 cursor-pointer font-sans text-sm font-semibold transition-colors shadow-sm"
-              >
-                <QrCode className="h-4 w-4" />
-                Proietta QR
-              </button>
-
-              {selectedEvent.tipo === "ASSEMBLEA" && (
-                <button
-                  onClick={() => setIsExportOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-full border border-green-600 cursor-pointer font-sans text-sm font-semibold transition-colors shadow-sm"
-                >
-                  <FileText className="h-4 w-4" />
-                  Esporta Verbale
-                </button>
-              )}
-
+                </div>
+              </div>
             </div>
           )}
         </div>
-
-        {/* Assemblea Quorum Progress Bar */}
-        {selectedEvent?.tipo === "ASSEMBLEA" && (
-          <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
-            {/* Header with status badge and button */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl border border-zinc-800 bg-zinc-800/60 text-yellow-500">
-                  <span className="text-2xl">🏛️</span>
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                    Quorum Costitutivo Assemblea (50% + 1)
-                  </h2>
-                  <p className="text-xs text-zinc-400">
-                    Soglia statutaria: <strong>{quorumTarget} soci</strong> su {totalVotingMembers} aventi diritto (preregistrati + deleghe).
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
-                {isQuorumReached ? (
-                  <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm font-mono">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-                    <span className="text-xs font-bold uppercase tracking-wider font-sans mr-1">Quorum:</span>
-                    <span className="text-xl sm:text-2xl font-black text-emerald-300 leading-none">
-                      {currentQuorumCount}
-                    </span>
-                    <span className="text-emerald-500/70 font-bold text-base leading-none">/</span>
-                    <span className="text-emerald-400 font-bold text-base leading-none">
-                      {quorumTarget}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 px-4 py-1.5 bg-zinc-800/90 border border-zinc-700 rounded-xl font-mono shadow-sm">
-                    <span className="text-xl sm:text-2xl font-black text-yellow-400 leading-none">
-                      {currentQuorumCount}
-                    </span>
-                    <span className="text-zinc-500 font-bold text-base leading-none">/</span>
-                    <span className="text-lg sm:text-xl text-zinc-300 font-bold leading-none">
-                      {quorumTarget}
-                    </span>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleDeclareAssembly}
-                  className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-xs font-bold transition-colors cursor-pointer"
-                >
-                  <span>🔨</span>
-                  <span>Dichiara Inizio</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Progress Bar (reaches 100% at quorumTarget) */}
-            <div className="pt-1">
-              <div className="w-full h-4 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
-                <div
-                  className="h-full bg-yellow-500 rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${quorumProgressPct}%` }}
-                />
-              </div>
-            </div>
-          </section>
-        )}
 
         {/* Real-time KPIs */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
