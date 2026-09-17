@@ -357,14 +357,18 @@ export default function Dashboard() {
 
   // Quorum calculation (50% + 1 of active members)
   // Quorum reaches 100% when reaching half the members + 1 (quorumTarget)
-  // Quorum includes: in-presence, online, and absent/excused members who delegated (delega_a)
+  // Quorum count is formed by: pre-registered / present members (from Form / CSV) + absent members with delegation
   const totalVotingMembers = activeMembers.length > 0 ? activeMembers.length : members.length;
   const quorumTarget = Math.floor(totalVotingMembers / 2) + 1;
 
   const validQuorumMembers = activeMembers.filter((m) => {
-    const isPresent = m.attendance_status === "IN_PRESENZA" || m.attendance_status === "ONLINE";
+    const isPreregOrPresent =
+      Boolean(m.is_preregistrato) ||
+      m.attendance_status === "PRE_REGISTRATO" ||
+      m.attendance_status === "IN_PRESENZA" ||
+      m.attendance_status === "ONLINE";
     const hasValidDelega = Boolean(m.delega_a && m.delega_a.trim() !== "" && m.delega_a !== "null");
-    return isPresent || hasValidDelega;
+    return isPreregOrPresent || hasValidDelega;
   });
 
   const currentQuorumCount = validQuorumMembers.length;
@@ -535,7 +539,7 @@ export default function Dashboard() {
                     Quorum Costitutivo Assemblea (50% + 1)
                   </h2>
                   <p className="text-xs text-zinc-400">
-                    Soglia statutaria: <strong>{quorumTarget} soci</strong> su {totalVotingMembers} aventi diritto (presenti in presenza + online + deleghe).
+                    Soglia statutaria: <strong>{quorumTarget} soci</strong> su {totalVotingMembers} aventi diritto (preregistrati + deleghe).
                   </p>
                 </div>
               </div>
@@ -559,7 +563,7 @@ export default function Dashboard() {
                       {currentQuorumCount}
                     </span>
                     <span className="text-zinc-500 font-bold text-base leading-none">/</span>
-                    <span className="text-zinc-300 font-bold text-base leading-none">
+                    <span className="text-lg sm:text-xl text-zinc-300 font-bold leading-none">
                       {quorumTarget}
                     </span>
                   </div>
