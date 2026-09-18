@@ -335,40 +335,29 @@ function CheckInContent() {
           )}
         </div>
 
-        {/* Modality selector — only for hybrid events */}
-        {!isOnlineOnly && !isInPersonOnly && (
+        {/* Modality selector — solo In Presenza per check-in mobile */}
+        {!isOnlineOnly && (
           <div className="space-y-2">
             <label className="text-xs font-bold text-gray-500 uppercase">
               Come partecipi?
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div>
               <button
+                type="button"
                 onClick={() => setModality("IN_PRESENZA")}
-                className={`py-3 px-4 border rounded-full font-semibold text-sm transition-colors flex items-center justify-center gap-2 ${modality === "IN_PRESENZA"
-                  ? "border-blue-500 bg-blue-50 text-blue-600"
-                  : "border-gray-200 hover:bg-gray-50:bg-zinc-800 text-gray-700"
-                  }`}
+                className="w-full py-3 px-4 border border-blue-500 bg-blue-50 text-blue-600 rounded-full font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm"
               >
                 <MapPin className="h-4 w-4" /> In Presenza
-              </button>
-              <button
-                onClick={() => setModality("ONLINE")}
-                className={`py-3 px-4 border rounded-full font-semibold text-sm transition-colors flex items-center justify-center gap-2 ${modality === "ONLINE"
-                  ? "border-purple-500 bg-purple-50 text-purple-600"
-                  : "border-gray-200 hover:bg-gray-50:bg-zinc-800 text-gray-700"
-                  }`}
-              >
-                <Wifi className="h-4 w-4" /> Online
               </button>
             </div>
           </div>
         )}
 
-        {/* Auto-mode badge */}
-        {(isOnlineOnly || isInPersonOnly) && (
+        {/* Auto-mode badge for online only */}
+        {isOnlineOnly && (
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-700 flex items-center gap-2">
-            {isOnlineOnly ? <Wifi className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
-            Evento {isOnlineOnly ? "Online" : "In Presenza"} — modalità impostata automaticamente.
+            <Wifi className="h-4 w-4" />
+            Evento Online — modalità impostata automaticamente.
           </div>
         )}
 

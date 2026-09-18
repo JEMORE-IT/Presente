@@ -73,16 +73,15 @@ export default function EventArchive() {
   const [exportEventTitle, setExportEventTitle] = useState("");
   
   // Event Creation Modal state
-  const getInitialDateTime = () => {
+  const getInitialDate = () => {
     const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    return now.toISOString().slice(0, 16);
+    return now.toISOString().slice(0, 10);
   };
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState("FORMAZIONE");
   const [newModality, setNewModality] = useState("HYBRID");
-  const [newDateTime, setNewDateTime] = useState(getInitialDateTime);
+  const [newDate, setNewDate] = useState(getInitialDate);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -183,7 +182,7 @@ export default function EventArchive() {
           titolo: newTitle,
           tipo: newType,
           modalita: newModality,
-          data_ora: newDateTime ? new Date(newDateTime).toISOString() : new Date().toISOString(),
+          data_ora: newDate ? new Date(newDate).toISOString() : new Date().toISOString(),
           soglia_consecutiva: 3, 
         }),
       });
@@ -192,7 +191,7 @@ export default function EventArchive() {
       const createdEvent = await res.json();
 
       setNewTitle("");
-      setNewDateTime(getInitialDateTime());
+      setNewDate(getInitialDate());
       setShowCreateForm(false);
       
       // Redirect to the dashboard for the new event
@@ -211,8 +210,6 @@ export default function EventArchive() {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
       });
     } catch {
       return dateStr;
@@ -395,7 +392,7 @@ export default function EventArchive() {
                                         variant="primary"
                                         className="gap-2 text-xs py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full"
                                       >
-                                        <LayoutDashboard className="h-4 w-4" /> Apri Registro Live
+                                        <LayoutDashboard className="h-4 w-4" /> Apri Dashboard
                                       </Button>
                                     </Link>
                                     {evt.tipo === "ASSEMBLEA" && (
@@ -611,12 +608,12 @@ export default function EventArchive() {
                 </div>
 
                 <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Data e Ora Evento</label>
+                  <label className="text-xs font-bold text-gray-500 uppercase">Data Evento</label>
                   <input
-                    type="datetime-local"
+                    type="date"
                     required
-                    value={newDateTime}
-                    onChange={(e) => setNewDateTime(e.target.value)}
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
                     className="w-full px-3 py-1.5 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
                   />
                 </div>

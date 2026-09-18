@@ -17,6 +17,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Presente! - JEMORE",
   description: "Piattaforma di tracciamento delle presenze JEMORE",
+  icons: {
+    icon: "/blu-verticale.svg",
+    shortcut: "/blu-verticale.svg",
+    apple: "/blu-verticale.svg",
+  },
 };
 
 export default function RootLayout({
