@@ -515,51 +515,16 @@ export default function Dashboard() {
                     <span className="text-xl">🏛️</span>
                   </div>
                   <div>
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h2 className="text-base font-bold text-white tracking-tight">
-                        Quorum Costitutivo Assemblea (50% + 1)
-                      </h2>
-                      {announcedAt && (
-                        <button
-                          onClick={() => setIsAnnouncementModalOpen(true)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 transition-colors cursor-pointer"
-                        >
-                          <span>🔨</span>
-                          Assemblea iniziata alle {announcedAt}
-                        </button>
-                      )}
-                    </div>
+                    <h2 className="text-base font-bold text-white tracking-tight">
+                      Quorum Costitutivo Assemblea (50% + 1)
+                    </h2>
                     <p className="text-xs text-zinc-400 mt-0.5">
                       Soglia statutaria: <strong>{quorumTarget} soci</strong> su {totalVotingMembers} aventi diritto (preregistrati + deleghe).
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
-                  {isQuorumReached ? (
-                    <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm font-mono">
-                      <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-                      <span className="text-xs font-bold uppercase tracking-wider font-sans mr-1">Quorum:</span>
-                      <span className="text-xl sm:text-2xl font-black text-emerald-300 leading-none">
-                        {currentQuorumCount}
-                      </span>
-                      <span className="text-emerald-500/70 font-bold text-base leading-none">/</span>
-                      <span className="text-emerald-400 font-bold text-base leading-none">
-                        {quorumTarget}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5 px-4 py-1.5 bg-zinc-800/90 border border-zinc-700 rounded-xl font-mono shadow-sm">
-                      <span className="text-xl sm:text-2xl font-black text-yellow-400 leading-none">
-                        {currentQuorumCount}
-                      </span>
-                      <span className="text-zinc-500 font-bold text-base leading-none">/</span>
-                      <span className="text-lg sm:text-xl text-zinc-300 font-bold leading-none">
-                        {quorumTarget}
-                      </span>
-                    </div>
-                  )}
-
+                <div className="flex flex-col sm:items-end gap-2 self-start sm:self-auto">
                   <button
                     onClick={handleDeclareAssembly}
                     className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-xs font-bold transition-colors cursor-pointer shadow-sm"
@@ -567,6 +532,42 @@ export default function Dashboard() {
                     <span>🔨</span>
                     <span>Dichiara Inizio</span>
                   </button>
+
+                  <div className="flex items-center gap-2.5 flex-wrap sm:justify-end">
+                    {isQuorumReached ? (
+                      <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm font-mono">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <span className="text-xs font-bold uppercase tracking-wider font-sans mr-1">Quorum:</span>
+                        <span className="text-xl sm:text-2xl font-black text-emerald-300 leading-none">
+                          {currentQuorumCount}
+                        </span>
+                        <span className="text-emerald-500/70 font-bold text-base leading-none">/</span>
+                        <span className="text-emerald-400 font-bold text-base leading-none">
+                          {quorumTarget}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-800/90 border border-zinc-700 rounded-xl font-mono shadow-sm">
+                        <span className="text-xl sm:text-2xl font-black text-yellow-400 leading-none">
+                          {currentQuorumCount}
+                        </span>
+                        <span className="text-zinc-500 font-bold text-base leading-none">/</span>
+                        <span className="text-lg sm:text-xl text-zinc-300 font-bold leading-none">
+                          {quorumTarget}
+                        </span>
+                      </div>
+                    )}
+
+                    {announcedAt && (
+                      <button
+                        onClick={() => setIsAnnouncementModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 transition-colors cursor-pointer"
+                      >
+                        <span>🔨</span>
+                        Assemblea iniziata alle {announcedAt}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
