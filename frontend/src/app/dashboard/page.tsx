@@ -555,29 +555,12 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs sm:text-sm font-bold text-white tracking-tight">
-                      Quorum Assemblea (50% + 1)
+                      Quorum Assemblea
                     </span>
-                    <span
-                      className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md border ${
-                        isQuorumReached
-                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                          : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
-                      }`}
-                    >
-                      {currentQuorumCount} / {quorumTarget}
-                    </span>
+            
                   </div>
 
-                  {announcedAt && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-yellow-500 text-zinc-950">
-                      <span>🔨</span> Iniziata alle {announcedAt}
-                    </span>
-                  )}
-                  {endedAt && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-red-600 text-white">
-                      <span>🏁</span> Conclusa alle {endedAt}
-                    </span>
-                  )}
+      
                 </div>
 
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 group-hover:text-zinc-200 shrink-0">
@@ -596,7 +579,7 @@ export default function Dashboard() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                       <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                        <span>🏛️</span> Quorum Costitutivo Assemblea: (50% + 1)
+                      Quorum Costitutivo Assemblea: (50% + 1)
                       </h3>
                       <p className="text-xs text-zinc-400 mt-1">
                         Soglia statutaria: <strong className="text-zinc-200">{quorumTarget} soci</strong> su {totalVotingMembers} (preregistrati + deleghe).

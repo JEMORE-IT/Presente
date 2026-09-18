@@ -31,7 +31,26 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [eventTitle, setEventTitle] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch event details (e.g. assemblea title)
+  useEffect(() => {
+    async function fetchEventDetails() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/events/${eventId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setEventTitle(data.titolo || "");
+        }
+      } catch (e) {
+        console.error("Failed to load event details", e);
+      }
+    }
+    if (eventId) {
+      fetchEventDetails();
+    }
+  }, [eventId]);
 
   // Fetch list of soci for dropdown
   useEffect(() => {
@@ -109,6 +128,11 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
         <div className="max-w-md w-full mx-auto p-10 bg-white rounded-xl shadow-2xl text-center space-y-4">
           <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
           <h2 className="text-2xl font-bold text-[#1f295c] tracking-tight">Partecipazione Registrata</h2>
+          {eventTitle && (
+            <p className="text-sm font-semibold text-blue-600">
+              {eventTitle}
+            </p>
+          )}
           <p className="text-sm text-gray-600">
             Grazie {session?.user?.name}, la tua scelta è stata salvata correttamente.
           </p>
@@ -124,9 +148,16 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
           <img src="/blu-verticale.svg" alt="JEMORE Logo" className="h-16 w-auto object-contain" />
         </div>
         
-        <h2 className="text-2xl font-bold text-center text-[#1f295c] mb-2 tracking-tight">
-          Modulo Partecipazione Assemblea
-        </h2>
+        <div className="text-center mb-4">
+          <h2 className="text-2xl font-bold text-[#1f295c] tracking-tight">
+            Modulo Partecipazione Assemblea
+          </h2>
+          {eventTitle && (
+            <p className="text-base font-semibold text-blue-600 mt-1">
+              {eventTitle}
+            </p>
+          )}
+        </div>
         
         <div className="bg-blue-50 text-blue-800 text-[13px] font-medium py-3 px-4 rounded-lg mb-8 flex items-center justify-center gap-2 border border-blue-100 shadow-sm text-center">
           <ShieldAlert className="h-4 w-4 shrink-0" />
