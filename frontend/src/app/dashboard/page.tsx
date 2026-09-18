@@ -6,7 +6,7 @@ import { LiveRosterTable } from "@/components/organisms/LiveRosterTable/LiveRost
 import { KpiCard } from "@/components/molecules/KpiCard/KpiCard";
 import { QrProjectorModal } from "@/components/organisms/QrProjectorModal/QrProjectorModal";
 import { MinutesExportModal } from "@/components/organisms/MinutesExportModal/MinutesExportModal";
-import { Users, UserCheck, Calendar, UserX, AlertCircle, QrCode, Upload, FileText, X, CheckCircle2 } from "lucide-react";
+import { Users, UserCheck, Calendar, UserX, AlertCircle, QrCode, Upload, FileText, X, CheckCircle2, ChevronDown } from "lucide-react";
 import { AssembleaAnnouncementModal } from "@/components/organisms/AssembleaAnnouncementModal/AssembleaAnnouncementModal";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -35,6 +35,7 @@ export default function Dashboard() {
   // Announcement state (Dichiarazione Inizio Assemblea)
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [announcedAt, setAnnouncedAt] = useState<string | null>(null);
+  const [isQuorumOpen, setIsQuorumOpen] = useState(false);
 
   // Load any previously declared announcement for the selected event
   useEffect(() => {
@@ -506,80 +507,144 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Row 2: Assembly Quorum & Status (integrated inside the same card) */}
+          {/* Row 2: Assembly Quorum Dropdown (collapsible to declutter dashboard) */}
           {selectedEvent?.tipo === "ASSEMBLEA" && (
-            <div className="pt-4 border-t border-zinc-800 space-y-3.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl border border-zinc-800 bg-zinc-800/60 text-yellow-500 shrink-0">
-                    <span className="text-xl">🏛️</span>
+            <div className="pt-3 border-t border-zinc-800">
+              {/* Dropdown Toggle Header */}
+              <button
+                type="button"
+                onClick={() => setIsQuorumOpen((prev) => !prev)}
+                className="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-zinc-800/40 hover:bg-zinc-800/70 border border-zinc-800 transition-all text-left cursor-pointer group"
+                aria-expanded={isQuorumOpen}
+              >
+                <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+                  <div className="p-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-yellow-500 shrink-0">
+                    <span className="text-base">🏛️</span>
                   </div>
-                  <div>
-                    <h2 className="text-base font-bold text-white tracking-tight">
-                      Quorum Costitutivo Assemblea (50% + 1)
-                    </h2>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      Soglia statutaria: <strong>{quorumTarget} soci</strong> su {totalVotingMembers} aventi diritto (preregistrati + deleghe).
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-white tracking-tight">
+                      Quorum Assemblea (50% + 1)
+                    </span>
+                    <span
+                      className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md border ${
+                        isQuorumReached
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+                      }`}
+                    >
+                      {currentQuorumCount} / {quorumTarget}
+                    </span>
                   </div>
+
+                  {announcedAt && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-yellow-500 text-zinc-950">
+                      <span>🔨</span> Iniziata alle {announcedAt}
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex flex-col sm:items-end gap-2 self-start sm:self-auto">
-                  <button
-                    onClick={handleDeclareAssembly}
-                    className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-xs font-bold transition-colors cursor-pointer shadow-sm"
-                  >
-                    <span>🔨</span>
-                    <span>Dichiara Inizio</span>
-                  </button>
-
-                  <div className="flex items-center gap-2.5 flex-wrap sm:justify-end">
-                    {isQuorumReached ? (
-                      <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm font-mono">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                        <span className="text-xs font-bold uppercase tracking-wider font-sans mr-1">Quorum:</span>
-                        <span className="text-xl sm:text-2xl font-black text-emerald-300 leading-none">
-                          {currentQuorumCount}
-                        </span>
-                        <span className="text-emerald-500/70 font-bold text-base leading-none">/</span>
-                        <span className="text-emerald-400 font-bold text-base leading-none">
-                          {quorumTarget}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-800/90 border border-zinc-700 rounded-xl font-mono shadow-sm">
-                        <span className="text-xl sm:text-2xl font-black text-yellow-400 leading-none">
-                          {currentQuorumCount}
-                        </span>
-                        <span className="text-zinc-500 font-bold text-base leading-none">/</span>
-                        <span className="text-lg sm:text-xl text-zinc-300 font-bold leading-none">
-                          {quorumTarget}
-                        </span>
-                      </div>
-                    )}
-
-                    {announcedAt && (
-                      <button
-                        onClick={() => setIsAnnouncementModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 transition-colors cursor-pointer"
-                      >
-                        <span>🔨</span>
-                        Assemblea iniziata alle {announcedAt}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Progress Bar (reaches 100% at quorumTarget) */}
-              <div className="pt-0.5">
-                <div className="w-full h-3.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
-                  <div
-                    className="h-full bg-yellow-500 rounded-full transition-all duration-500 ease-out"
-                    style={{ width: `${quorumProgressPct}%` }}
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 group-hover:text-zinc-200 shrink-0">
+                  <span className="hidden sm:inline">{isQuorumOpen ? "Nascondi Quorum" : "Dettagli Quorum"}</span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform duration-200 ${
+                      isQuorumOpen ? "rotate-180 text-yellow-400" : ""
+                    }`}
                   />
                 </div>
-              </div>
+              </button>
+
+              {/* Collapsible Dropdown Content */}
+              {isQuorumOpen && (
+                <div className="mt-3 p-4 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                        <span>🏛️</span> Quorum Costitutivo Assemblea
+                      </h3>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Soglia statutaria: <strong className="text-zinc-200">{quorumTarget} soci</strong> su {totalVotingMembers} aventi diritto (preregistrati + deleghe).
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-wrap md:justify-end">
+                      {/* Numeri di votanti grandi con focus visivo */}
+                      {isQuorumReached ? (
+                        <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm font-mono">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 font-sans">
+                              Quorum Raggiunto
+                            </span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl sm:text-3xl font-black text-emerald-300 leading-none">
+                                {currentQuorumCount}
+                              </span>
+                              <span className="text-emerald-500/70 font-bold text-lg leading-none">/</span>
+                              <span className="text-emerald-400 font-bold text-lg leading-none">
+                                {quorumTarget}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 px-3.5 py-2 bg-zinc-800/90 border border-zinc-700 rounded-xl font-mono shadow-sm">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-sans">
+                              Votanti Presenti
+                            </span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl sm:text-3xl font-black text-yellow-400 leading-none">
+                                {currentQuorumCount}
+                              </span>
+                              <span className="text-zinc-500 font-bold text-lg leading-none">/</span>
+                              <span className="text-lg sm:text-xl text-zinc-300 font-bold leading-none">
+                                {quorumTarget}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bottoni: Dichiara Inizio e sotto bottone giallo Assemblea Iniziata */}
+                      <div className="flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleDeclareAssembly}
+                          className="flex items-center justify-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-xs font-bold transition-colors cursor-pointer shadow-sm"
+                        >
+                          <span>🔨</span>
+                          <span>Dichiara Inizio</span>
+                        </button>
+
+                        {announcedAt && (
+                          <button
+                            type="button"
+                            onClick={() => setIsAnnouncementModalOpen(true)}
+                            className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-yellow-500 hover:bg-yellow-400 text-zinc-950 border border-yellow-400 transition-colors cursor-pointer shadow-sm"
+                          >
+                            <span>🔨</span>
+                            <span>Assemblea iniziata alle {announcedAt}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar (reaches 100% at quorumTarget) */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex justify-between items-center text-xs font-medium text-zinc-400">
+                      <span>Avanzamento Quorum</span>
+                      <span className="text-yellow-400 font-mono font-bold">{quorumProgressPct}%</span>
+                    </div>
+                    <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                      <div
+                        className="h-full bg-yellow-500 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${quorumProgressPct}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
