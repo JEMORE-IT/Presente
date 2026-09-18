@@ -32,12 +32,14 @@ export default function Dashboard() {
   const [checkinError, setCheckinError] = useState<string | null>(null);
   const [isImportDropdownOpen, setIsImportDropdownOpen] = useState(false);
 
-  // Announcement state (Dichiarazione Inizio Assemblea)
+  // Announcement state (Dichiarazione Inizio & Fine Assemblea)
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
+  const [announcementModalType, setAnnouncementModalType] = useState<"start" | "end">("start");
   const [announcedAt, setAnnouncedAt] = useState<string | null>(null);
+  const [endedAt, setEndedAt] = useState<string | null>(null);
   const [isQuorumOpen, setIsQuorumOpen] = useState(false);
 
-  // Load any previously declared announcement for the selected event
+  // Load any previously declared announcements for the selected event
   useEffect(() => {
     if (selectedEventId && typeof window !== "undefined") {
       const saved = localStorage.getItem(`assemblea_announcement_${selectedEventId}`);
@@ -45,11 +47,14 @@ export default function Dashboard() {
         try {
           const parsed = JSON.parse(saved);
           setAnnouncedAt(parsed.time || parsed.phrase || null);
+          setEndedAt(parsed.endTime || null);
         } catch {
           setAnnouncedAt(null);
+          setEndedAt(null);
         }
       } else {
         setAnnouncedAt(null);
+        setEndedAt(null);
       }
     }
   }, [selectedEventId]);
@@ -57,8 +62,35 @@ export default function Dashboard() {
   const handleDeclareAssembly = () => {
     const timeStr = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
     setAnnouncedAt(timeStr);
+    setAnnouncementModalType("start");
     if (selectedEventId && typeof window !== "undefined") {
-      localStorage.setItem(`assemblea_announcement_${selectedEventId}`, JSON.stringify({ time: timeStr }));
+      const saved = localStorage.getItem(`assemblea_announcement_${selectedEventId}`);
+      let existingData = {};
+      try {
+        if (saved) existingData = JSON.parse(saved);
+      } catch {}
+      localStorage.setItem(
+        `assemblea_announcement_${selectedEventId}`,
+        JSON.stringify({ ...existingData, time: timeStr })
+      );
+    }
+    setIsAnnouncementModalOpen(true);
+  };
+
+  const handleDeclareAssemblyEnd = () => {
+    const timeStr = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    setEndedAt(timeStr);
+    setAnnouncementModalType("end");
+    if (selectedEventId && typeof window !== "undefined") {
+      const saved = localStorage.getItem(`assemblea_announcement_${selectedEventId}`);
+      let existingData = {};
+      try {
+        if (saved) existingData = JSON.parse(saved);
+      } catch {}
+      localStorage.setItem(
+        `assemblea_announcement_${selectedEventId}`,
+        JSON.stringify({ ...existingData, endTime: timeStr })
+      );
     }
     setIsAnnouncementModalOpen(true);
   };
@@ -541,6 +573,11 @@ export default function Dashboard() {
                       <span>🔨</span> Iniziata alle {announcedAt}
                     </span>
                   )}
+                  {endedAt && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-red-600 text-white">
+                      <span>🏁</span> Conclusa alle {endedAt}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 group-hover:text-zinc-200 shrink-0">
@@ -559,10 +596,10 @@ export default function Dashboard() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                       <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                        <span>🏛️</span> Quorum Costitutivo Assemblea
+                        <span>🏛️</span> Quorum Costitutivo Assemblea: (50% + 1)
                       </h3>
                       <p className="text-xs text-zinc-400 mt-1">
-                        Soglia statutaria: <strong className="text-zinc-200">{quorumTarget} soci</strong> su {totalVotingMembers} aventi diritto (preregistrati + deleghe).
+                        Soglia statutaria: <strong className="text-zinc-200">{quorumTarget} soci</strong> su {totalVotingMembers} (preregistrati + deleghe).
                       </p>
                     </div>
 
@@ -605,26 +642,54 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {/* Bottoni: Dichiara Inizio e sotto bottone giallo Assemblea Iniziata */}
-                      <div className="flex flex-col gap-1.5">
-                        <button
-                          type="button"
-                          onClick={handleDeclareAssembly}
-                          className="flex items-center justify-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-xs font-bold transition-colors cursor-pointer shadow-sm"
-                        >
-                          <span>🔨</span>
-                          <span>Dichiara Inizio</span>
-                        </button>
-
-                        {announcedAt && (
+                      {/* Bottoni: Inizio e Fine Assemblea */}
+                      <div className="flex flex-col gap-2">
+                        {!announcedAt ? (
                           <button
                             type="button"
-                            onClick={() => setIsAnnouncementModalOpen(true)}
-                            className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-yellow-500 hover:bg-yellow-400 text-zinc-950 border border-yellow-400 transition-colors cursor-pointer shadow-sm"
+                            onClick={handleDeclareAssembly}
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-sm font-bold transition-colors cursor-pointer shadow-sm"
+                          >
+                            <span>🔨</span>
+                            <span>Dichiara Inizio</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAnnouncementModalType("start");
+                              setIsAnnouncementModalOpen(true);
+                            }}
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 rounded-full text-sm font-bold transition-colors cursor-pointer shadow-sm"
                           >
                             <span>🔨</span>
                             <span>Assemblea iniziata alle {announcedAt}</span>
                           </button>
+                        )}
+
+                        {announcedAt && (
+                          !endedAt ? (
+                            <button
+                              type="button"
+                              onClick={handleDeclareAssemblyEnd}
+                              className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-full text-sm font-bold transition-colors cursor-pointer shadow-sm"
+                            >
+                              <span>🏁</span>
+                              <span>Dichiara Fine</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAnnouncementModalType("end");
+                                setIsAnnouncementModalOpen(true);
+                              }}
+                              className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-full text-sm font-bold transition-colors cursor-pointer shadow-sm"
+                            >
+                              <span>🏁</span>
+                              <span>Assemblea conclusa alle {endedAt}</span>
+                            </button>
+                          )
                         )}
                       </div>
                     </div>
@@ -722,7 +787,8 @@ export default function Dashboard() {
           isOpen={isAnnouncementModalOpen}
           onClose={() => setIsAnnouncementModalOpen(false)}
           eventTitle={selectedEvent.titolo}
-          announcedTime={announcedAt}
+          type={announcementModalType}
+          announcedTime={announcementModalType === "end" ? endedAt : announcedAt}
         />
       )}
 
