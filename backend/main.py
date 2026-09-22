@@ -547,22 +547,22 @@ async def register_delega(
     if pdf_url:
         result["pdf_url"] = pdf_url
 
-    # Appends to Excel file on OneDrive if ASSEMBLEA
-    if event.tipo == "ASSEMBLEA":
-        try:
-            from ms_graph import append_to_excel_on_drive
-            cartella = f"Deleghe_{event.titolo.replace(' ', '_')}"
-            row_data = {
-                "nome": socio.nome,
-                "email": socio.email,
-                "modalita": db_modalita,
-                "delega_a": delega_a if db_modalita == "GIUSTIFICATO" else "",
-                "intolleranze": intolleranze or ""
-            }
-            # Execute without blocking the return heavily (in a real prod app, use BackgroundTasks)
-            await append_to_excel_on_drive(cartella, "Raccolta_Dati.xlsx", row_data)
-        except Exception as e:
-            print(f"Error appending to Excel on Drive: {e}")
+    # Appends / syncs to Excel file on OneDrive
+    try:
+        from ms_graph import append_to_excel_on_drive
+        import re
+        safe_titolo = re.sub(r'[^a-zA-Z0-9_\-]', '_', event.titolo)
+        cartella = f"Deleghe_{safe_titolo}"
+        row_data = {
+            "nome": socio.nome,
+            "email": socio.email,
+            "modalita": db_modalita,
+            "delega_a": delega_a if db_modalita == "GIUSTIFICATO" else "",
+            "intolleranze": intolleranze or ""
+        }
+        await append_to_excel_on_drive(cartella, "Raccolta_Dati.xlsx", row_data)
+    except Exception as e:
+        print(f"Error appending to Excel on Drive: {e}")
 
     # Broadcast to SSE listeners
     await broadcast_to_sse("CHECKIN_UPDATED", result)

@@ -87,7 +87,8 @@ async def create_and_upload_empty_excel(folder_name: str, file_name: str = "Racc
 
 async def append_to_excel_on_drive(folder_name: str, file_name: str, row_data: dict) -> bool:
     """
-    Downloads an Excel file from OneDrive, appends a row, and uploads it back.
+    Downloads an Excel file from OneDrive, appends or updates a row for the member, and uploads it back.
+    If the Excel file does not exist yet on OneDrive (404), it creates it with bold headers and the first row.
     """
     if not MS_DRIVE_ID:
         return False
@@ -101,41 +102,83 @@ async def append_to_excel_on_drive(folder_name: str, file_name: str, row_data: d
     url = f"https://graph.microsoft.com/v1.0/drives/{MS_DRIVE_ID}/root:/{path}:/content"
     
     async with httpx.AsyncClient(follow_redirects=True) as client:
-        # Download
         res_get = await client.get(url, headers=headers)
-        if res_get.status_code != 200:
-            print(f"Failed to download Excel file for appending: {res_get.text}")
-            return False
-            
-        existing_content = res_get.content
         
-        # Modify
         try:
-            wb = openpyxl.load_workbook(filename=io.BytesIO(existing_content))
-            ws = wb.active
-            
-            row = [
-                row_data.get("nome", ""),
-                row_data.get("email", ""),
-                row_data.get("modalita", ""),
-                row_data.get("delega_a", ""),
-                row_data.get("intolleranze", ""),
-                datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            ]
-            ws.append(row)
-            
+            if res_get.status_code == 404:
+                # File doesn't exist yet: initialize a new workbook
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = "Raccolta Dati"
+                header_cols = ["Nome", "Email", "Modalità", "Delegato", "Intolleranze", "Registrato Il"]
+                ws.append(header_cols)
+                for col_idx in range(1, len(header_cols) + 1):
+                    ws.cell(row=1, column=col_idx).font = openpyxl.styles.Font(bold=True)
+                
+                # Append first entry
+                ws.append([
+                    row_data.get("nome", ""),
+                    row_data.get("email", ""),
+                    row_data.get("modalita", ""),
+                    row_data.get("delega_a", ""),
+                    row_data.get("intolleranze", ""),
+                    datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                ])
+            elif res_get.status_code == 200:
+                # File exists: load and update/append
+                existing_content = res_get.content
+                wb = openpyxl.load_workbook(filename=io.BytesIO(existing_content))
+                ws = wb.active
+                
+                email_to_match = (row_data.get("email") or "").strip().lower()
+                row_found_idx = None
+                
+                # Check if this member is already in the sheet (column 2 is Email)
+                for row_idx in range(2, ws.max_row + 1):
+                    cell_val = ws.cell(row=row_idx, column=2).value
+                    if cell_val and str(cell_val).strip().lower() == email_to_match:
+                        row_found_idx = row_idx
+                        break
+                
+                new_row_values = [
+                    row_data.get("nome", ""),
+                    row_data.get("email", ""),
+                    row_data.get("modalita", ""),
+                    row_data.get("delega_a", ""),
+                    row_data.get("intolleranze", ""),
+                    datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                ]
+                
+                if row_found_idx:
+                    # Update existing row
+                    for col_idx, val in enumerate(new_row_values, start=1):
+                        ws.cell(row=row_found_idx, column=col_idx, value=val)
+                else:
+                    # Append new row
+                    ws.append(new_row_values)
+            else:
+                print(f"Failed to fetch Excel file from OneDrive: HTTP {res_get.status_code} - {res_get.text}")
+                return False
+
+            # Auto-fit column widths slightly for readability
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or '')) for cell in col)
+                col_letter = openpyxl.utils.get_column_letter(col[0].column)
+                ws.column_dimensions[col_letter].width = max(max_len + 3, 14)
+
             output = io.BytesIO()
             wb.save(output)
             new_content = output.getvalue()
         except Exception as e:
-            print(f"Error appending to Excel locally: {e}")
+            print(f"Error preparing Excel file content: {e}")
             return False
             
-        # Upload
+        # Upload back to OneDrive
         headers["Content-Type"] = "application/octet-stream"
         res_put = await client.put(url, headers=headers, content=new_content)
         if res_put.status_code not in (200, 201):
-            print(f"Failed to re-upload Excel file: {res_put.text}")
+            print(f"Failed to upload Excel file to OneDrive: {res_put.status_code} - {res_put.text}")
             return False
             
         return True
+
