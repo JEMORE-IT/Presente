@@ -120,7 +120,10 @@ export default function EventArchive() {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch(`${API_BASE_URL}/api/events`);
+      const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
+      const res = await fetch(`${API_BASE_URL}/api/events`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error("Errore nel caricamento degli eventi");
       const data = await res.json();
       setEvents(data);
@@ -143,7 +146,10 @@ export default function EventArchive() {
     setLoadingRoster(true);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/roster`);
+      const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
+      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/roster`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error("Errore nel caricamento del roster dell'evento");
       const data = await res.json();
       setRosterData(data);
@@ -175,9 +181,13 @@ export default function EventArchive() {
 
     try {
       setCreating(true);
+      const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
       const res = await fetch(`${API_BASE_URL}/api/events`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           titolo: newTitle,
           tipo: newType,

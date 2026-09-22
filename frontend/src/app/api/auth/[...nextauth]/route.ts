@@ -47,12 +47,15 @@ const handler = NextAuth({
         // Fetch user role from FastAPI backend
         try {
           const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-          let res = await fetch(`${apiUrl}/api/soci/${email}`);
+          const internalHeaders = {
+            "X-Internal-Secret": process.env.INTERNAL_API_SECRET || "presente-internal-system-secret-2026"
+          };
+          let res = await fetch(`${apiUrl}/api/soci/${email}`, { headers: internalHeaders });
           
           // Se ha punti (es. nome.cognome) ma a DB non ci sono, prova anche la versione pulita
           if (!res.ok && email.includes(".")) {
             const clean = email.split("@")[0].replace(/\./g, "") + "@jemore.it";
-            const altRes = await fetch(`${apiUrl}/api/soci/${clean}`);
+            const altRes = await fetch(`${apiUrl}/api/soci/${clean}`, { headers: internalHeaders });
             if (altRes.ok) res = altRes;
           }
 

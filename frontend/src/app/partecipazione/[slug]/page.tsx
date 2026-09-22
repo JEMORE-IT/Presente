@@ -76,7 +76,7 @@ export default function PartecipazioneSlugPage({
   useEffect(() => {
     async function fetchSoci() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/soci`);
+        const res = await fetch(`${API_BASE_URL}/api/soci?slug=${encodeURIComponent(slug)}`);
         if (res.ok) {
           const data = await res.json();
           const userEmail = session?.user?.email?.toLowerCase().trim();

@@ -137,39 +137,78 @@ def verify_daily_qr_code(code: str) -> tuple[bool, int | None]:
 
     return False, None
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> dict:
-    """
-    Validates the Bearer token (JWT) from Microsoft Entra ID.
-    If DEV_MODE = True, signature check is bypassed, and token claims are decoded directly
-    (or a mock user is returned if token is invalid or plain text).
-    """
-    token = credentials.credentials
+from typing import Optional
+from fastapi import Header
 
+INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET", "presente-internal-system-secret-2026")
+
+security = HTTPBearer(auto_error=False)
+
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security),
+    x_internal_secret: Optional[str] = Header(None, alias="X-Internal-Secret")
+) -> dict:
+    """
+    Validates authentication for incoming requests.
+    Supports:
+    1. Internal server-to-server calls via X-Internal-Secret or Bearer <INTERNAL_API_SECRET>.
+    2. Microsoft Entra ID JWT Bearer tokens (with DEV_MODE fallback for local testing).
+    """
+    # 1. Check for trusted internal system secret
+    if x_internal_secret and hmac.compare_digest(x_internal_secret, INTERNAL_API_SECRET):
+        return {
+            "email": "system@jemore.it",
+            "name": "Internal System",
+            "ruolo": "Board",
+            "area_lavoro": "IT",
+            "is_admin": True,
+            "claims": {"ruolo": "Board", "area_lavoro": "IT"}
+        }
+
+    # 2. Check for Bearer token credentials
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=401,
+            detail="Autenticazione richiesta. Effettua l'accesso con il tuo account @jemore.it.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    token = credentials.credentials.strip()
+
+    # 3. Check if Bearer token is the internal secret
+    if hmac.compare_digest(token, INTERNAL_API_SECRET):
+        return {
+            "email": "system@jemore.it",
+            "name": "Internal System",
+            "ruolo": "Board",
+            "area_lavoro": "IT",
+            "is_admin": True,
+            "claims": {"ruolo": "Board", "area_lavoro": "IT"}
+        }
+
+    # 4. In DEV_MODE:
     if DEV_MODE:
-        # In DEV_MODE, attempt to decode token without verifying signature,
-        # or fallback to returning a mock user dict if the token isn't a valid JWT.
         try:
-            # Decode payload without verifying signature and expiration for local dev
+            # Decode payload without verifying signature for local dev
             payload = jwt.decode(token, options={"verify_signature": False, "verify_exp": False})
-            
-            # Microsoft tokens put email in 'preferred_username', 'email', or 'upn'
             email = payload.get("preferred_username") or payload.get("email") or payload.get("upn")
             name = payload.get("name", "Dev User")
-            
             return {
-                "email": email or "dev.user@jemore.it",
+                "email": (email or "dev.user@jemore.it").lower().strip(),
                 "name": name,
                 "claims": payload
             }
         except Exception:
-            # Fallback for simple testing with raw string tokens (e.g. "dev_token")
+            clean_email = token.lower().strip()
+            if "@" not in clean_email:
+                clean_email = f"{clean_email}@jemore.it"
             return {
-                "email": f"{token.lower()}@jemore.it" if "@" not in token else token,
+                "email": clean_email,
                 "name": token.title(),
                 "claims": {}
             }
 
-    # PRODUCTION MODE: Full JWKS validation
+    # 5. PRODUCTION MODE: Full JWKS validation
     try:
         unverified_header = jwt.get_unverified_header(token)
     except Exception as e:
@@ -201,13 +240,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         from jwt import PyJWK
         jwk = PyJWK(rsa_key)
         
-        # Verify token using the fetched Microsoft RSA public key
-        # In production, configure your specific client ID (Audience) and Tenant ID (Issuer)
         payload = jwt.decode(
             token,
             jwk.key,
             algorithms=["RS256"],
-            options={"verify_aud": False}  # Adjust to verify aud if tenant/client IDs are configured
+            options={"verify_aud": False}
         )
         
         email = payload.get("preferred_username") or payload.get("email") or payload.get("upn")
@@ -215,7 +252,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
             raise HTTPException(status_code=401, detail="Token is missing email field")
             
         return {
-            "email": email,
+            "email": email.lower().strip(),
             "name": payload.get("name", ""),
             "claims": payload
         }
@@ -226,17 +263,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Token verification failed: {e}")
 
-def is_admin_or_it_manager(user: dict) -> bool:
+def is_admin_or_it_manager(user: dict, db = None) -> bool:
     """
-    Checks if user is Joachim Chiebuka (IT Manager), Board member, or Responsabile.
+    Checks if user has administrator or IT Manager privileges.
+    Guarantees Joachim Chiebuka full Super-Admin rights.
     """
-    email = (user.get("email") or "").lower()
-    name = (user.get("name") or "").lower()
-    claims = user.get("claims") or {}
-    ruolo = str(claims.get("ruolo") or "").lower()
-    area_lavoro = str(claims.get("area_lavoro") or "").lower()
+    if user.get("is_admin"):
+        return True
 
-    # Joachim Chiebuka / IT Manager has FULL administrator access
+    email = (user.get("email") or "").lower().strip()
+    name = (user.get("name") or "").lower().strip()
+    claims = user.get("claims") or {}
+    ruolo = str(claims.get("ruolo") or user.get("ruolo") or "").lower().strip()
+    area_lavoro = str(claims.get("area_lavoro") or user.get("area_lavoro") or "").lower().strip()
+
+    # 1. Super-admin: Joachim Chiebuka (IT Manager)
     if "joachim" in email or "joachim" in name:
         return True
     if "manager" in ruolo or "it" in area_lavoro or "it" in ruolo:
@@ -247,12 +288,41 @@ def is_admin_or_it_manager(user: dict) -> bool:
         return True
     if email in ["board@jemore.it", "responsabili@jemore.it"]:
         return True
+
+    # 2. Check against database role if db session provided
+    if db is not None:
+        try:
+            import models
+            socio = db.query(models.Socio).filter(models.Socio.email.ilike(email)).first()
+            if socio:
+                s_ruolo = (socio.ruolo or "").lower().strip()
+                s_area = (socio.area_lavoro or "").lower().strip()
+                if "it" in s_area or "it" in s_ruolo or "manager" in s_ruolo:
+                    return True
+                if any(k in s_ruolo for k in ["board", "responsabile", "presidente", "tesoriere", "segretario"]):
+                    return True
+                if any(k in s_area for k in ["board", "responsabile"]):
+                    return True
+        except Exception:
+            pass
+
     return False
 
-async def require_admin_or_it_manager(current_user: dict = Depends(get_current_user)) -> dict:
+async def require_admin_or_it_manager(
+    current_user: dict = Depends(get_current_user)
+) -> dict:
     """
     FastAPI dependency that enforces administrative or IT Manager privileges.
+    Checks user claims and association database records.
     """
-    if not is_admin_or_it_manager(current_user):
-        raise HTTPException(status_code=403, detail="Accesso riservato al Board e IT Manager (Joachim Chiebuka)")
-    return current_user
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        if not is_admin_or_it_manager(current_user, db):
+            raise HTTPException(
+                status_code=403,
+                detail="Accesso negato: operazione riservata al Board e IT Manager (Joachim Chiebuka)."
+            )
+        return current_user
+    finally:
+        db.close()

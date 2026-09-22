@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { RosterMember } from "@/components/organisms/LiveRosterTable/LiveRosterTable.types";
 import { LiveRosterTable } from "@/components/organisms/LiveRosterTable/LiveRosterTable";
 import { KpiCard } from "@/components/molecules/KpiCard/KpiCard";
@@ -22,6 +23,13 @@ interface Evento {
 }
 
 export default function Dashboard() {
+  const { data: session } = useSession();
+
+  const getAuthHeaders = (): Record<string, string> => {
+    const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const [members, setMembers] = useState<RosterMember[]>([]);
   const [events, setEvents] = useState<Evento[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
@@ -103,7 +111,9 @@ export default function Dashboard() {
       setError("");
 
       // Fetch events
-      const eventsRes = await fetch(`${API_BASE_URL}/api/events`);
+      const eventsRes = await fetch(`${API_BASE_URL}/api/events`, {
+        headers: getAuthHeaders(),
+      });
       if (!eventsRes.ok) throw new Error("Errore nel recupero degli eventi");
       const eventsData = await eventsRes.json();
       setEvents(eventsData);
@@ -131,7 +141,9 @@ export default function Dashboard() {
   const fetchEventRoster = async (eventId: number) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/roster`);
+      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/roster`, {
+        headers: getAuthHeaders(),
+      });
       if (!res.ok) throw new Error("Errore nel recupero roster dell'evento");
       const data = await res.json();
       // Map "status" from API to "attendance_status" for the frontend
@@ -281,7 +293,10 @@ export default function Dashboard() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/checkin/manual`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({
           socio_id: socioId,
           event_id: selectedEventId,
@@ -318,6 +333,7 @@ export default function Dashboard() {
       setError("");
       const res = await fetch(`${API_BASE_URL}/api/events/${selectedEventId}/import-pre-assembly`, {
         method: "POST",
+        headers: getAuthHeaders(),
         body: formData,
       });
 
@@ -348,6 +364,7 @@ export default function Dashboard() {
       setError("");
       const res = await fetch(`${API_BASE_URL}/api/events/${selectedEventId}/import-teams`, {
         method: "POST",
+        headers: getAuthHeaders(),
         body: formData,
       });
 

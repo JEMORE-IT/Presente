@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import QRCode from "qrcode";
 import { QrProjectorModalProps } from "./QrProjectorModal.types";
 import { X, Smartphone, Copy, Check } from "lucide-react";
@@ -10,6 +11,7 @@ export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
   eventId,
   eventTitle = "Evento",
 }) => {
+  const { data: session } = useSession();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [checkinUrl, setCheckinUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -24,7 +26,10 @@ export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
 
     const generateUrl = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/qr`);
+        const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
+        const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/qr`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (res.ok) {
           const data = await res.json();
           const origin =

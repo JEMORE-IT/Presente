@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Search, Filter, ArrowUpDown, AlertCircle, AlertTriangle, CheckCircle, Loader2, Users, FileSpreadsheet, ShieldAlert, Database } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -26,6 +27,13 @@ type SortField = "nome" | "global_attendance_pct" | "assembly_absences";
 type SortOrder = "asc" | "desc";
 
 export default function MemberAnalyticsPage() {
+  const { data: session } = useSession();
+
+  const getAuthHeaders = (): Record<string, string> => {
+    const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const [analytics, setAnalytics] = useState<MemberAnalytics[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,6 +71,7 @@ export default function MemberAnalyticsPage() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/members/import`, {
         method: "POST",
+        headers: getAuthHeaders(),
         body: formData,
       });
 
@@ -96,6 +105,7 @@ export default function MemberAnalyticsPage() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/members/sync-postgres`, {
         method: "POST",
+        headers: getAuthHeaders(),
       });
 
       const data = await res.json();
@@ -131,7 +141,9 @@ export default function MemberAnalyticsPage() {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch(`${API_BASE_URL}/api/members/analytics`);
+      const res = await fetch(`${API_BASE_URL}/api/members/analytics`, {
+        headers: getAuthHeaders(),
+      });
       if (!res.ok) throw new Error("Errore durante il recupero dei dati analitici");
       const data = await res.json();
       setAnalytics(data);

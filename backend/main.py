@@ -10,7 +10,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from datetime import datetime
 from typing import Optional
-from fastapi import FastAPI, Depends, HTTPException, Query, Security, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, Query, Security, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -27,7 +27,9 @@ from auth import (
     verify_daily_qr_code,
     generate_form_slug,
     require_admin_or_it_manager,
-    DEV_MODE
+    DEV_MODE,
+    security,
+    INTERNAL_API_SECRET
 )
 import services
 from postgres_sync import sync_soci_from_postgres
@@ -191,9 +193,14 @@ def health_check():
 # --- Event Endpoints ---
 
 @app.post("/api/events", response_model=EventResponse)
-async def create_event(event_in: EventCreate, db: Session = Depends(get_db)):
+async def create_event(
+    event_in: EventCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
     Creates a new event with a secure form_slug.
+    Restricted to Board and IT Manager.
     """
     new_event = models.Evento(
         titolo=event_in.titolo,
@@ -240,9 +247,14 @@ def list_events(db: Session = Depends(get_db)):
     return events
 
 @app.get("/api/events/{event_id}/qr")
-def get_event_qr(event_id: int, db: Session = Depends(get_db)):
+def get_event_qr(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
     Generates a daily rotating QR code (valid for 24 hours) and returns clean slug path.
+    Restricted to Board and IT Manager.
     """
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
@@ -419,14 +431,17 @@ class ManualCheckinRequest(BaseModel):
     delega_a: Optional[str] = None
 
 @app.post("/api/checkin/manual")
-async def manual_checkin(payload: ManualCheckinRequest, db: Session = Depends(get_db)):
+async def manual_checkin(
+    payload: ManualCheckinRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
-    Registers a check-in manually by an administrator.
-    This does not require a QR code token, since it is triggered by an admin.
+    Registers a check-in manually by an administrator or IT Manager.
     """
     socio = db.query(models.Socio).filter(models.Socio.id == payload.socio_id).first()
     if not socio:
-        raise HTTPException(status_code=404, detail="Socio not found")
+        raise HTTPException(status_code=404, detail="Socio non trovato")
         
     result = services.checkin_member(
         db=db,
@@ -457,27 +472,42 @@ async def register_delega(
 ):
     """
     Registers an absence with a delegation (delega), optionally uploading a PDF to Microsoft Drive.
+    Enforces strict file validation (PDF only, max 10MB, magic bytes check) and sanitization.
     """
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
         
-    socio = db.query(models.Socio).filter(models.Socio.email.ilike(email)).first()
+    socio = db.query(models.Socio).filter(models.Socio.email.ilike(email.strip())).first()
     if not socio:
-        raise HTTPException(status_code=404, detail="Socio non trovato")
+        raise HTTPException(status_code=404, detail="Socio non trovato nel database dell'associazione")
+    if socio.stato != "ATTIVO":
+        raise HTTPException(status_code=403, detail="Operazione non consentita: solo i soci con stato ATTIVO possono partecipare o delegare.")
 
-    # 1. Se c'è un file di delega, lo carichiamo su OneDrive
+    # 1. Se c'è un file di delega, lo validiamo scrupolosamente e lo carichiamo su OneDrive
     pdf_url = None
     if file and delega_a:
+        if not file.filename or not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Formato file non valido. È ammesso esclusivamente il formato PDF (.pdf).")
         try:
-            from ms_graph import upload_file_to_drive
             content = await file.read()
-            # Cartella con il nome dell'evento
-            cartella = f"Deleghe_{event.titolo.replace(' ', '_')}"
-            nome_file = f"Delega_{socio.nome.replace(' ', '_')}_A_{delega_a.replace(' ', '_')}.pdf"
+            if len(content) > 10 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Il file PDF supera la dimensione massima consentita di 10MB.")
+            if not content.startswith(b"%PDF"):
+                raise HTTPException(status_code=400, detail="Il file caricato non è un documento PDF valido.")
+
+            import re
+            safe_titolo = re.sub(r'[^a-zA-Z0-9_\-]', '_', event.titolo)
+            safe_socio = re.sub(r'[^a-zA-Z0-9_\-]', '_', socio.nome)
+            safe_delega = re.sub(r'[^a-zA-Z0-9_\-]', '_', delega_a)
+            cartella = f"Deleghe_{safe_titolo}"
+            nome_file = f"Delega_{safe_socio}_A_{safe_delega}.pdf"
+
+            from ms_graph import upload_file_to_drive
             pdf_url = await upload_file_to_drive(content, nome_file, cartella)
+        except HTTPException:
+            raise
         except Exception as e:
-            # Se l'upload fallisce, segnaliamo un errore grave
             print(f"Failed to upload to drive: {e}")
             raise HTTPException(status_code=500, detail=f"Errore durante l'upload su Microsoft Drive: {str(e)}")
 
@@ -643,9 +673,15 @@ def get_event_roster(event_id: int, db: Session = Depends(get_db)):
     }
 
 @app.post("/api/events/{event_id}/import-pre-assembly")
-async def import_pre_assembly(event_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_pre_assembly(
+    event_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
     Imports a pre-assembly CSV file for an event to record proxies (delege) and pre-registrations.
+    Restricted to Board and IT Manager.
     """
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
@@ -666,9 +702,16 @@ async def import_pre_assembly(event_id: int, file: UploadFile = File(...), db: S
         raise HTTPException(status_code=400, detail=f"Errore durante l'importazione del file CSV: {str(e)}")
 
 @app.post("/api/events/{event_id}/import-teams")
-async def import_teams(event_id: int, threshold_minutes: int = Query(15, description="Minuti minimi per essere considerati presenti"), file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_teams(
+    event_id: int,
+    threshold_minutes: int = Query(15, description="Minuti minimi per essere considerati presenti"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
     Imports a Microsoft Teams attendance report CSV for online attendees.
+    Restricted to Board and IT Manager.
     """
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
@@ -715,16 +758,25 @@ async def live_stream():
 # --- Minutes & Analytics Endpoints ---
 
 @app.get("/api/members/analytics")
-def get_members_analytics(db: Session = Depends(get_db)):
+def get_members_analytics(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
     Returns global participation statistics, assembly attendances, and warning alerts.
+    Restricted to Board and IT Manager.
     """
     return services.get_member_analytics(db)
 
 @app.post("/api/members/import")
-async def import_members(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_members(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
     Imports or updates members from an uploaded CSV (prospetto_completo format).
+    Restricted to Board and IT Manager.
     """
     try:
         contents = await file.read()
@@ -735,9 +787,13 @@ async def import_members(file: UploadFile = File(...), db: Session = Depends(get
         raise HTTPException(status_code=400, detail=f"Errore durante l'importazione dell'anagrafica: {str(e)}")
 
 @app.post("/api/members/sync-postgres")
-def trigger_postgres_sync(db: Session = Depends(get_db)):
+def trigger_postgres_sync(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
     Manually triggers a synchronization of the members table from the external PostgreSQL database.
+    Restricted to Board and IT Manager.
     """
     result = sync_soci_from_postgres(db)
     if result.get("status") == "error":
@@ -745,9 +801,15 @@ def trigger_postgres_sync(db: Session = Depends(get_db)):
     return result
 
 @app.get("/api/events/{event_id}/export-minutes/csv")
-def export_minutes_csv(event_id: int, quorum_pct: float = Query(0.5, description="Custom quorum threshold percentage"), db: Session = Depends(get_db)):
+def export_minutes_csv(
+    event_id: int,
+    quorum_pct: float = Query(0.5, description="Custom quorum threshold percentage"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
     Generates and downloads a CSV spreadsheet report for event minutes.
+    Restricted to Board and IT Manager.
     """
     import reports
     try:
@@ -763,9 +825,15 @@ def export_minutes_csv(event_id: int, quorum_pct: float = Query(0.5, description
         raise HTTPException(status_code=500, detail=f"Errore durante l'esportazione: {str(e)}")
 
 @app.get("/api/events/{event_id}/export-minutes/pdf")
-def export_minutes_pdf(event_id: int, quorum_pct: float = Query(0.5, description="Custom quorum threshold percentage"), db: Session = Depends(get_db)):
+def export_minutes_pdf(
+    event_id: int,
+    quorum_pct: float = Query(0.5, description="Custom quorum threshold percentage"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
     """
     Generates and downloads a print-ready official PDF minutes report.
+    Restricted to Board and IT Manager.
     """
     import reports
     try:
@@ -782,12 +850,21 @@ def export_minutes_pdf(event_id: int, quorum_pct: float = Query(0.5, description
 
 
 @app.get("/api/soci/{email}")
-def get_socio_by_email(email: str, db: Session = Depends(get_db)):
+def get_socio_by_email(
+    email: str,
+    db: Session = Depends(get_db),
+    x_internal_secret: Optional[str] = Header(None, alias="X-Internal-Secret")
+):
     """
     Returns member details by email for NextAuth role validation.
+    Accepts internal server calls via X-Internal-Secret.
     """
-    # check for exact match or lowercase match
-    socio = db.query(models.Socio).filter(models.Socio.email.ilike(email)).first()
+    import hmac
+    is_internal = x_internal_secret and hmac.compare_digest(x_internal_secret, INTERNAL_API_SECRET)
+    if not is_internal and not DEV_MODE:
+        raise HTTPException(status_code=403, detail="Richiesta interna non autorizzata.")
+
+    socio = db.query(models.Socio).filter(models.Socio.email.ilike(email.strip())).first()
     if not socio:
         raise HTTPException(status_code=404, detail="Socio not found")
     return {
@@ -800,7 +877,10 @@ def get_socio_by_email(email: str, db: Session = Depends(get_db)):
     }
 
 @app.get("/api/soci")
-def list_soci(db: Session = Depends(get_db)):
+def list_soci(
+    slug: Optional[str] = Query(None, description="Secret form slug if calling from participation form"),
+    db: Session = Depends(get_db)
+):
     """
     Returns all active members for dropdowns.
     """
