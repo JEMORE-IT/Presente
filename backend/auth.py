@@ -8,18 +8,26 @@ import httpx
 from fastapi import HTTPException, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+from typing import Optional
+from fastapi import Header
+
 # DEV_MODE: Set to True for local testing without Azure Entra configuration.
-DEV_MODE = True
+# In production (e.g. Dokploy), set DEV_MODE=false to enforce full RS256 JWKS validation.
+DEV_MODE = os.getenv("DEV_MODE", "true").lower() in ("true", "1", "yes")
 
 # Secret key for generating/verifying dynamic QR code HMAC tokens.
 # In production, this must be a secure random key loaded from environment variables.
 QR_SECRET_KEY = os.getenv("QR_SECRET_KEY", "presente-super-secret-key-321").encode("utf-8")
 
-# Microsoft JWKS config
-MICROSOFT_JWKS_URL = "https://login.microsoftonline.com/common/discovery/v2.0/keys"
+# Internal shared secret for server-to-server calls (e.g. NextAuth <-> FastAPI)
+INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET", "presente-internal-system-secret-2026")
+
+# Microsoft JWKS config (supports tenant-specific or common)
+MS_TENANT_ID = os.getenv("MS_TENANT_ID", "common")
+MICROSOFT_JWKS_URL = f"https://login.microsoftonline.com/{MS_TENANT_ID}/discovery/v2.0/keys"
 jwks_cache = {"keys": [], "expires_at": 0}
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 async def get_microsoft_jwks() -> list:
     """
@@ -136,13 +144,6 @@ def verify_daily_qr_code(code: str) -> tuple[bool, int | None]:
             return True, event_id
 
     return False, None
-
-from typing import Optional
-from fastapi import Header
-
-INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET", "presente-internal-system-secret-2026")
-
-security = HTTPBearer(auto_error=False)
 
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Security(security),
