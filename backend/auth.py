@@ -2,9 +2,10 @@ import os
 import time
 import hmac
 import hashlib
+import secrets
 import jwt
 import httpx
-from fastapi import HTTPException, Security
+from fastapi import HTTPException, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # DEV_MODE: Set to True for local testing without Azure Entra configuration.
@@ -90,6 +91,51 @@ def verify_qr_token(event_id: int, token_to_verify: str) -> bool:
             return True
             
     return False
+
+def generate_form_slug(event_id: int) -> str:
+    """
+    Generates a secure, deterministic or random URL-safe slug for the event's form.
+    Format is clean and concise: 8 characters.
+    """
+    message = f"form_secret:{event_id}".encode("utf-8")
+    slug = hmac.new(QR_SECRET_KEY, message, hashlib.sha256).hexdigest()[:8]
+    return slug
+
+def generate_daily_qr_code(event_id: int, timestamp: float = None) -> str:
+    """
+    Generates a daily rotating QR code (valid for 24 hours).
+    Format: "{event_id}-{sig}" with no eventId segment in the path: /checkin/{code}.
+    """
+    if timestamp is None:
+        timestamp = time.time()
+    day_window = int(timestamp // 86400)
+    message = f"event_daily:{event_id}:{day_window}".encode("utf-8")
+    sig = hmac.new(QR_SECRET_KEY, message, hashlib.sha256).hexdigest()[:12]
+    return f"{event_id}-{sig}"
+
+def verify_daily_qr_code(code: str) -> tuple[bool, int | None]:
+    """
+    Verifies daily QR code and returns (is_valid, event_id).
+    Checks current 24h day window and previous day window (tolerance for midnight events).
+    """
+    try:
+        parts = code.split("-")
+        if len(parts) != 2:
+            return False, None
+        event_id = int(parts[0])
+        token_to_verify = parts[1]
+    except Exception:
+        return False, None
+
+    now = time.time()
+    current_day = int(now // 86400)
+    for day in [current_day, current_day - 1]:
+        message = f"event_daily:{event_id}:{day}".encode("utf-8")
+        expected_sig = hmac.new(QR_SECRET_KEY, message, hashlib.sha256).hexdigest()[:12]
+        if hmac.compare_digest(expected_sig, token_to_verify):
+            return True, event_id
+
+    return False, None
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> dict:
     """
@@ -179,3 +225,34 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         raise HTTPException(status_code=401, detail=f"Incorrect claims: {e}")
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Token verification failed: {e}")
+
+def is_admin_or_it_manager(user: dict) -> bool:
+    """
+    Checks if user is Joachim Chiebuka (IT Manager), Board member, or Responsabile.
+    """
+    email = (user.get("email") or "").lower()
+    name = (user.get("name") or "").lower()
+    claims = user.get("claims") or {}
+    ruolo = str(claims.get("ruolo") or "").lower()
+    area_lavoro = str(claims.get("area_lavoro") or "").lower()
+
+    # Joachim Chiebuka / IT Manager has FULL administrator access
+    if "joachim" in email or "joachim" in name:
+        return True
+    if "manager" in ruolo or "it" in area_lavoro or "it" in ruolo:
+        return True
+    if any(k in ruolo for k in ["board", "responsabile", "presidente", "tesoriere", "segretario"]):
+        return True
+    if any(k in area_lavoro for k in ["board", "responsabile"]):
+        return True
+    if email in ["board@jemore.it", "responsabili@jemore.it"]:
+        return True
+    return False
+
+async def require_admin_or_it_manager(current_user: dict = Depends(get_current_user)) -> dict:
+    """
+    FastAPI dependency that enforces administrative or IT Manager privileges.
+    """
+    if not is_admin_or_it_manager(current_user):
+        raise HTTPException(status_code=403, detail="Accesso riservato al Board e IT Manager (Joachim Chiebuka)")
+    return current_user

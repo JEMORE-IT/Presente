@@ -168,6 +168,21 @@ export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
                   currentStatus === "GIUSTIFICATO" || currentStatus === "ASSENTE_GIUSTIFICATO";
                 const isCritical = member.is_critical_alert && currentStatus === "ASSENTE";
 
+                const isPresentStatus = (s?: string) => s === "IN_PRESENZA" || s === "ONLINE";
+                const hasDelega = Boolean(member.delega_a && member.delega_a.trim() !== "" && member.delega_a !== "null");
+                let isDelegatePresent = true;
+                if (hasDelega) {
+                  const target = member.delega_a!.trim().toLowerCase();
+                  const delegateObj = members.find(
+                    (m) => m.nome.trim().toLowerCase() === target || m.email.trim().toLowerCase() === target
+                  );
+                  if (delegateObj) {
+                    isDelegatePresent = isPresentStatus(delegateObj.attendance_status);
+                  } else {
+                    isDelegatePresent = member.is_delegate_present ?? false;
+                  }
+                }
+
                 return (
                   <tr
                     key={member.socio_id}
@@ -180,8 +195,14 @@ export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
                     }`}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-semibold text-gray-900 dark:text-white">
-                        {member.nome}
+                      <div className="flex items-center gap-2 font-semibold text-gray-900 dark:text-white">
+                        <span>{member.nome}</span>
+                        {hasDelega && !isDelegatePresent && (
+                          <span
+                            className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 shadow-xs animate-pulse shrink-0"
+                            title={`Attenzione: il delegato (${member.delega_a}) non ha ancora effettuato il check-in`}
+                          />
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         {member.email}
@@ -196,9 +217,20 @@ export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <StatusBadge status={currentStatus as any} />
-                        {member.delega_a && (
-                          <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
-                            Delega a: <span className="text-gray-700 dark:text-gray-300">{member.delega_a}</span>
+                        {hasDelega && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                            {!isDelegatePresent ? (
+                              <span
+                                className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"
+                                title={`Delegato (${member.delega_a}) assente`}
+                              />
+                            ) : (
+                              <span
+                                className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"
+                                title={`Delegato (${member.delega_a}) presente`}
+                              />
+                            )}
+                            Delega a: <span className="text-gray-700 dark:text-gray-300 font-semibold">{member.delega_a}</span>
                           </span>
                         )}
                       </div>

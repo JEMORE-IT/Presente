@@ -7,12 +7,16 @@ export default withAuth(
     const user = req.nextauth.token;
 
     // Le rotte pubbliche o aperte a tutti i membri @jemore.it
-    if (pathname.startsWith("/checkin") || pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+    if (
+      pathname.startsWith("/checkin") ||
+      pathname.startsWith("/partecipazione") ||
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/api/auth")
+    ) {
       return NextResponse.next();
     }
 
-    // Rotte riservate al Board o Responsabili
-    // Rotte riservate al Board, Responsabili, Manager e Co-Manager
+    // Rotte riservate al Board, Responsabili, Manager e IT
     const ruolo = (user?.ruolo as string)?.toLowerCase() || "";
     const area_lavoro = (user?.area_lavoro as string)?.toLowerCase() || "";
     const email = (user?.email as string)?.toLowerCase() || "";
@@ -34,7 +38,6 @@ export default withAuth(
       area_lavoro === "it" ||
       area_lavoro.includes("it ") ||
       email === "board@jemore.it" || 
-      email === "responsabili@jemore.it";
       email === "responsabili@jemore.it" ||
       email.includes("joachim") ||
       name.includes("joachim");
@@ -49,8 +52,12 @@ export default withAuth(
   {
     callbacks: {
       authorized: ({ req, token }) => {
-        // Allow unauthenticated users to access /checkin and /login so they can see the custom login screen
-        if (req.nextUrl.pathname.startsWith("/checkin") || req.nextUrl.pathname.startsWith("/login")) {
+        // Allow unauthenticated users to access /checkin, /partecipazione, /login so they can see custom login
+        if (
+          req.nextUrl.pathname.startsWith("/checkin") ||
+          req.nextUrl.pathname.startsWith("/partecipazione") ||
+          req.nextUrl.pathname.startsWith("/login")
+        ) {
           return true;
         }
         return !!token; // Assicura che l'utente sia loggato per le altre rotte

@@ -30,6 +30,7 @@ class Evento(Base):
     modalita = Column(String, nullable=False)  # "ONLINE_ONLY", "HYBRID", "IN_PERSON_ONLY"
     soglia_consecutiva = Column(Integer, default=3, nullable=False)
     is_attivo = Column(Boolean, default=True, nullable=False)
+    form_slug = Column(String, unique=True, index=True, nullable=True)
 
     # Relationships
     presenze = relationship("Presenza", back_populates="evento", cascade="all, delete-orphan")

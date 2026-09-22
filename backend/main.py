@@ -19,17 +19,48 @@ from pydantic import BaseModel, EmailStr
 import models
 from database import engine, Base, get_db, SessionLocal
 from parsers import parse_and_seed_csv, possible_paths, parse_and_seed_csv_text
-from auth import get_current_user, generate_qr_token, verify_qr_token, DEV_MODE
+from auth import (
+    get_current_user,
+    generate_qr_token,
+    verify_qr_token,
+    generate_daily_qr_code,
+    verify_daily_qr_code,
+    generate_form_slug,
+    require_admin_or_it_manager,
+    DEV_MODE
+)
 import services
 from postgres_sync import sync_soci_from_postgres
+from sqlalchemy import text
 
 # Initialize DB tables safely
 def init_db():
     try:
         Base.metadata.create_all(bind=engine)
+        # Ensure form_slug column exists in eventi table
+        with engine.connect() as conn:
+            try:
+                conn.execute(text("ALTER TABLE eventi ADD COLUMN form_slug VARCHAR"))
+                conn.commit()
+            except Exception:
+                pass
         seed_database_if_empty()
+        ensure_event_slugs()
     except Exception as e:
         print(f"Warning: Database initialization encountered an issue: {e}")
+
+def ensure_event_slugs():
+    db = SessionLocal()
+    try:
+        events = db.query(models.Evento).all()
+        for evt in events:
+            if not getattr(evt, "form_slug", None):
+                evt.form_slug = generate_form_slug(evt.id)
+        db.commit()
+    except Exception as e:
+        print(f"Error ensuring event slugs: {e}")
+    finally:
+        db.close()
 
 # Initial roster seed if soci table is empty
 def seed_database_if_empty():
@@ -99,12 +130,14 @@ class EventResponse(BaseModel):
     modalita: str
     soglia_consecutiva: int
     is_attivo: bool
+    form_slug: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 class CheckinPayload(BaseModel):
-    event_id: int
+    event_id: Optional[int] = None
+    code: Optional[str] = None
     modalita: Optional[str] = "IN_PRESENZA"
     token: Optional[str] = None
 
@@ -160,7 +193,7 @@ def health_check():
 @app.post("/api/events", response_model=EventResponse)
 async def create_event(event_in: EventCreate, db: Session = Depends(get_db)):
     """
-    Creates a new event.
+    Creates a new event with a secure form_slug.
     """
     new_event = models.Evento(
         titolo=event_in.titolo,
@@ -173,6 +206,11 @@ async def create_event(event_in: EventCreate, db: Session = Depends(get_db)):
     db.add(new_event)
     db.commit()
     db.refresh(new_event)
+
+    # Assign secure unique form slug for the participation link
+    new_event.form_slug = generate_form_slug(new_event.id)
+    db.commit()
+    db.refresh(new_event)
     
     # Broadcast event creation
     await broadcast_to_sse("EVENT_CREATED", {"id": new_event.id, "titolo": new_event.titolo})
@@ -182,8 +220,6 @@ async def create_event(event_in: EventCreate, db: Session = Depends(get_db)):
         try:
             from ms_graph import create_and_upload_empty_excel
             cartella = f"Deleghe_{new_event.titolo.replace(' ', '_')}"
-            # This task can happen in the background or awaited directly.
-            # Awaiting to ensure it's created before any fast submissions.
             await create_and_upload_empty_excel(cartella)
         except Exception as e:
             print(f"Failed to create Excel for Assemblea: {e}")
@@ -195,13 +231,18 @@ def list_events(db: Session = Depends(get_db)):
     """
     Lists all events.
     """
-    return db.query(models.Evento).order_by(models.Evento.data_ora.desc()).all()
+    events = db.query(models.Evento).order_by(models.Evento.data_ora.desc()).all()
+    # Ensure form_slug is set on every event
+    for evt in events:
+        if not getattr(evt, "form_slug", None):
+            evt.form_slug = generate_form_slug(evt.id)
+    db.commit()
+    return events
 
 @app.get("/api/events/{event_id}/qr")
 def get_event_qr(event_id: int, db: Session = Depends(get_db)):
     """
-    Generates a rotating HMAC-SHA256 token for an event's check-in QR code.
-    Cycles every 30 seconds.
+    Generates a daily rotating QR code (valid for 24 hours) and returns clean slug path.
     """
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
@@ -209,18 +250,73 @@ def get_event_qr(event_id: int, db: Session = Depends(get_db)):
     if not event.is_attivo:
         raise HTTPException(status_code=400, detail="Event is not active")
         
+    if not event.form_slug:
+        event.form_slug = generate_form_slug(event.id)
+        db.commit()
+
+    daily_code = generate_daily_qr_code(event_id)
     token, window_id = generate_qr_token(event_id)
-    
-    # Calculate seconds remaining in the current 30-second window
-    seconds_remaining = 30 - (int(datetime.utcnow().timestamp()) % 30)
     
     from auth import generate_static_qr_token
     return {
         "event_id": event_id,
-        "token": token,
-        "seconds_remaining": seconds_remaining,
-        "window_id": window_id,
+        "daily_code": daily_code,
+        "token": daily_code,
+        "form_slug": event.form_slug,
         "static_token": generate_static_qr_token(event_id)
+    }
+
+@app.get("/api/checkin/qr/{code}")
+def get_checkin_event_by_qr_code(code: str, db: Session = Depends(get_db)):
+    """
+    Resolves event information from a 24-hour QR code slug (e.g. /checkin/1-7f3b89a2).
+    """
+    is_valid, event_id = verify_daily_qr_code(code)
+    
+    # Fallback check if code is static token format: "{event_id}-{static_token}"
+    if not is_valid or not event_id:
+        try:
+            from auth import verify_static_qr_token
+            parts = code.split("-")
+            if len(parts) == 2 and verify_static_qr_token(int(parts[0]), parts[1]):
+                is_valid = True
+                event_id = int(parts[0])
+        except Exception:
+            pass
+
+    if not is_valid or not event_id:
+        raise HTTPException(status_code=404, detail="Codice QR non valido o scaduto (validità 24 ore)")
+
+    event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento non trovato")
+    if not event.is_attivo:
+        raise HTTPException(status_code=400, detail="L'evento non è più attivo")
+
+    return {
+        "event_id": event.id,
+        "titolo": event.titolo,
+        "tipo": event.tipo,
+        "modalita": event.modalita,
+        "data_ora": event.data_ora.isoformat() if event.data_ora else None,
+        "is_attivo": event.is_attivo
+    }
+
+@app.get("/api/events/form/{slug}")
+def get_event_by_form_slug(slug: str, db: Session = Depends(get_db)):
+    """
+    Retrieves public event information using the secret form slug without event ID in the path.
+    """
+    event = db.query(models.Evento).filter(models.Evento.form_slug == slug).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Link di partecipazione non valido o inesistente")
+    return {
+        "id": event.id,
+        "titolo": event.titolo,
+        "tipo": event.tipo,
+        "modalita": event.modalita,
+        "data_ora": event.data_ora.isoformat() if event.data_ora else None,
+        "is_attivo": event.is_attivo
     }
 
 @app.get("/api/events/{event_id}")
@@ -231,17 +327,16 @@ def get_event(event_id: int, db: Session = Depends(get_db)):
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    if not event.form_slug:
+        event.form_slug = generate_form_slug(event.id)
+        db.commit()
     return event
 
 @app.delete("/api/events/{event_id}")
-def delete_event(event_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def delete_event(event_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_admin_or_it_manager)):
     """
-    Deletes an event by its ID. Restricted to specific user based on JWT claims.
+    Deletes an event by its ID. Restricted to IT Manager (Joachim Chiebuka) and Board.
     """
-    user_name = current_user.get("name")
-    if user_name not in ["Joachim Chiebuka Ihedioha", "Ihedioha Joachim Chiebuka"]:
-        raise HTTPException(status_code=403, detail="Forbidden")
-        
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -256,16 +351,35 @@ def delete_event(event_id: int, db: Session = Depends(get_db), current_user: dic
 async def checkin(payload: CheckinPayload, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """
     Registers a check-in via QR code scan.
-    Security is identity-based: the user must be authenticated (via mock session or Entra ID).
-    The QR code identifies the event; no rotating token is required.
+    Accepts 24-hour daily QR code (payload.code) or legacy static token.
     """
     event_id = payload.event_id
+
+    # If code is provided (from /checkin/[code]), verify daily 24h code
+    if payload.code:
+        is_valid, verified_id = verify_daily_qr_code(payload.code)
+        if not is_valid or not verified_id:
+            try:
+                from auth import verify_static_qr_token
+                parts = payload.code.split("-")
+                if len(parts) == 2 and verify_static_qr_token(int(parts[0]), parts[1]):
+                    is_valid = True
+                    verified_id = int(parts[0])
+            except Exception:
+                pass
+
+        if not is_valid or not verified_id:
+            raise HTTPException(status_code=403, detail="Codice QR non valido o scaduto (validità 24 ore)")
+        event_id = verified_id
+    elif payload.token and event_id:
+        from auth import verify_static_qr_token
+        if not verify_static_qr_token(event_id, payload.token):
+            raise HTTPException(status_code=403, detail="Token QR Code non valido o mancante.")
+    elif not event_id:
+        raise HTTPException(status_code=400, detail="Codice QR o ID Evento mancante.")
+
     email = current_user.get("email")
     name = current_user.get("name")
-    
-    from auth import verify_static_qr_token
-    if not payload.token or not verify_static_qr_token(event_id, payload.token):
-        raise HTTPException(status_code=403, detail="Token QR Code non valido o mancante. Non puoi modificare l'ID evento manualmente.")
     
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
@@ -388,14 +502,14 @@ async def register_delega(
         intolleranze=intolleranze
     )
     
-    # If the user was pre-registered, set the flag explicitly
-    if is_prereg and result.get("status") == "success" and result.get("type") == "matched":
+    # Update preregistrato flag cleanly (sets True for IN_PRESENZA/ONLINE pre-registration, False if changed to ASSENTE)
+    if result.get("status") == "success" and result.get("type") == "matched":
         presence = db.query(models.Presenza).filter(
             models.Presenza.evento_id == event_id,
             models.Presenza.socio_id == result["socio_id"]
         ).first()
         if presence:
-            presence.is_preregistrato = True
+            presence.is_preregistrato = is_prereg
             db.commit()
     
     result["event_id"] = event_id
@@ -424,6 +538,32 @@ async def register_delega(
     await broadcast_to_sse("CHECKIN_UPDATED", result)
     return result
 
+@app.post("/api/events/form/{slug}/delega")
+async def register_delega_by_slug(
+    slug: str,
+    email: str = Form(...),
+    modalita: str = Form(...),
+    delega_a: Optional[str] = Form(None),
+    intolleranze: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Registers participation or delegation using the secret form slug without event ID in path.
+    """
+    event = db.query(models.Evento).filter(models.Evento.form_slug == slug).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Link di partecipazione non valido o inesistente")
+    return await register_delega(
+        event_id=event.id,
+        email=email,
+        modalita=modalita,
+        delega_a=delega_a,
+        intolleranze=intolleranze,
+        file=file,
+        db=db
+    )
+
 # --- Dashboard & Roster Endpoints ---
 
 @app.get("/api/streaks")
@@ -437,7 +577,7 @@ def get_streaks(tipo: Optional[str] = Query(None, description="Filter by event t
 def get_event_roster(event_id: int, db: Session = Depends(get_db)):
     """
     Gets the complete roster status for an event (including checked-in members,
-    absent members, and streak indicators).
+    absent members, streak indicators, and delegation status).
     """
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
@@ -450,6 +590,14 @@ def get_event_roster(event_id: int, db: Session = Depends(get_db)):
     presences = db.query(models.Presenza).filter(models.Presenza.evento_id == event_id).all()
     presence_map = {p.socio_id: p for p in presences}
     
+    # Build a lookup of identities (names and emails) that are currently present (IN_PRESENZA or ONLINE)
+    present_identities = set()
+    for socio in active_soci:
+        p = presence_map.get(socio.id)
+        if p and p.modalita in ["IN_PRESENZA", "ONLINE"]:
+            present_identities.add(socio.nome.strip().lower())
+            present_identities.add(socio.email.strip().lower())
+
     # Get all streaks of this event type
     streaks = services.get_absence_streaks(db, event_type=event.tipo)
     streak_map = {s["socio_id"]: s for s in streaks}
@@ -464,6 +612,11 @@ def get_event_roster(event_id: int, db: Session = Depends(get_db)):
         durata = presence.durata_minuti if presence else 0
         registrato_il = presence.registrato_il.isoformat() if presence else None
         
+        # Check if delegate is present
+        is_delegate_present = True
+        if delega_a and delega_a.strip():
+            is_delegate_present = delega_a.strip().lower() in present_identities
+
         roster.append({
             "socio_id": socio.id,
             "nome": socio.nome,
@@ -473,6 +626,7 @@ def get_event_roster(event_id: int, db: Session = Depends(get_db)):
             "stato": socio.stato,
             "status": status,
             "delega_a": delega_a,
+            "is_delegate_present": is_delegate_present,
             "durata_minuti": durata,
             "registrato_il": registrato_il,
             "consecutive_absences": streak_info["consecutive_absences"],

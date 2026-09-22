@@ -18,6 +18,7 @@ interface Evento {
   modalita: string;
   soglia_consecutiva: number;
   is_attivo: boolean;
+  form_slug?: string;
 }
 
 export default function Dashboard() {
@@ -480,7 +481,8 @@ export default function Dashboard() {
                         <button
                           onClick={() => {
                             setIsImportDropdownOpen(false);
-                            const link = `${window.location.origin}/events/${selectedEvent.id}/partecipazione`;
+                            const slug = selectedEvent.form_slug || selectedEvent.id;
+                            const link = `${window.location.origin}/partecipazione/${slug}`;
                             navigator.clipboard.writeText(link);
                             alert("Link univoco per il modulo di partecipazione copiato negli appunti:\n" + link);
                           }}
@@ -506,7 +508,8 @@ export default function Dashboard() {
                 ) : (
                   <button
                     onClick={() => {
-                      const link = `${window.location.origin}/events/${selectedEvent.id}/partecipazione`;
+                      const slug = selectedEvent.form_slug || selectedEvent.id;
+                      const link = `${window.location.origin}/partecipazione/${slug}`;
                       navigator.clipboard.writeText(link);
                       alert("Link univoco per il modulo di partecipazione copiato negli appunti:\n" + link);
                     }}

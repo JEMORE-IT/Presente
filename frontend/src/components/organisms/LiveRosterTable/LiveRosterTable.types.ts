@@ -11,6 +11,7 @@ export interface RosterMember {
   attendance_status?: "IN_PRESENZA" | "ONLINE" | "ASSENTE_GIUSTIFICATO" | "GIUSTIFICATO" | "PRE_REGISTRATO" | "ASSENTE";
   attendance_modality?: string;
   delega_a?: string;
+  is_delegate_present?: boolean;
   is_preregistrato?: boolean;
   durata_minuti?: number;
   registrato_il?: string;

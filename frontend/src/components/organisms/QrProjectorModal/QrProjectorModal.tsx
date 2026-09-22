@@ -31,7 +31,8 @@ export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
             typeof window !== "undefined"
               ? window.location.origin
               : "http://localhost:3000";
-          const url = `${origin}/checkin?event_id=${eventId}&token=${data.static_token}`;
+          const code = data.daily_code || data.token || data.static_token;
+          const url = `${origin}/checkin/${code}`;
           setCheckinUrl(url);
           setError("");
 
