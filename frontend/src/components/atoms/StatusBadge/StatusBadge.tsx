@@ -14,8 +14,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   const labels = {
     IN_PRESENZA: "In Presenza",
     ONLINE: "Online",
-    ASSENTE_GIUSTIFICATO: "Giustificato",
-    GIUSTIFICATO: "Giustificato",
+    ASSENTE_GIUSTIFICATO: "Delegato",
+    GIUSTIFICATO: "Delegato",
     PRE_REGISTRATO: "Pre-Registrato",
     ASSENTE: "Assente",
   };

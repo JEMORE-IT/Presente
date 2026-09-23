@@ -20,6 +20,8 @@ interface Evento {
   soglia_consecutiva: number;
   is_attivo: boolean;
   form_slug?: string;
+  luogo?: string;
+  tipo_assemblea?: string;
 }
 
 export default function Dashboard() {
@@ -540,7 +542,7 @@ export default function Dashboard() {
                 {/* Proietta QR */}
                 <button
                   onClick={() => setIsQrOpen(true)}
-                  className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-semibold transition-colors cursor-pointer"
+                  className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-semibold transition-colors cursor-pointer shadow-sm"
                 >
                   <QrCode className="h-3.5 w-3.5" />
                   Proietta QR
@@ -549,7 +551,7 @@ export default function Dashboard() {
                 {selectedEvent.tipo === "ASSEMBLEA" && (
                   <button
                     onClick={() => setIsExportOpen(true)}
-                    className="flex items-center gap-2 px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-xs font-semibold transition-colors cursor-pointer"
+                    className="flex items-center gap-2 px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-xs font-semibold transition-colors cursor-pointer shadow-sm"
                   >
                     <FileText className="h-3.5 w-3.5" />
                     Esporta Verbale
@@ -739,7 +741,7 @@ export default function Dashboard() {
             variant="success"
           />
           <KpiCard
-            title="Giustificati"
+            title="Delegati"
             value={loading ? "-" : excusedCount}
             icon={<Calendar className="h-5 w-5 text-yellow-500" />}
             variant="warning"

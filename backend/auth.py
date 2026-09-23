@@ -5,11 +5,9 @@ import hashlib
 import secrets
 import jwt
 import httpx
-from fastapi import HTTPException, Security, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
 from typing import Optional
-from fastapi import Header
+from fastapi import HTTPException, Security, Depends, Header, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # DEV_MODE: Set to True for local testing without Azure Entra configuration.
 # In production (e.g. Dokploy), set DEV_MODE=false to enforce full RS256 JWKS validation.
@@ -147,6 +145,7 @@ def verify_daily_qr_code(code: str) -> tuple[bool, int | None]:
 
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Security(security),
+    token_query: Optional[str] = Query(None, alias="token"),
     x_internal_secret: Optional[str] = Header(None, alias="X-Internal-Secret")
 ) -> dict:
     """
@@ -154,6 +153,7 @@ async def get_current_user(
     Supports:
     1. Internal server-to-server calls via X-Internal-Secret or Bearer <INTERNAL_API_SECRET>.
     2. Microsoft Entra ID JWT Bearer tokens (with DEV_MODE fallback for local testing).
+    3. Query parameter ?token=... for file export downloads.
     """
     # 1. Check for trusted internal system secret
     if x_internal_secret and hmac.compare_digest(x_internal_secret, INTERNAL_API_SECRET):
@@ -166,15 +166,20 @@ async def get_current_user(
             "claims": {"ruolo": "Board", "area_lavoro": "IT"}
         }
 
-    # 2. Check for Bearer token credentials
-    if not credentials or not credentials.credentials:
+    # Extract token from Bearer header or query parameter
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials.strip()
+    elif token_query:
+        token = token_query.strip()
+
+    # 2. Check for token credentials
+    if not token:
         raise HTTPException(
             status_code=401,
             detail="Autenticazione richiesta. Effettua l'accesso con il tuo account @jemore.it.",
             headers={"WWW-Authenticate": "Bearer"}
         )
-
-    token = credentials.credentials.strip()
 
     # 3. Check if Bearer token is the internal secret
     if hmac.compare_digest(token, INTERNAL_API_SECRET):

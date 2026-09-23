@@ -3,10 +3,11 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Search, Filter, Calendar, FileText, ChevronDown, ChevronUp, Loader2, Users, LayoutDashboard, PlusCircle, X, Trash2 } from "lucide-react";
+import { Search, Filter, Calendar, FileText, ChevronDown, ChevronUp, Loader2, Users, LayoutDashboard, PlusCircle, X, Trash2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/atoms/Button/Button";
 import { StatusBadge } from "@/components/atoms/StatusBadge/StatusBadge";
 import { MinutesExportModal } from "@/components/organisms/MinutesExportModal/MinutesExportModal";
+import { ConvocazioneModal } from "@/components/organisms/ConvocazioneModal/ConvocazioneModal";
 import { API_BASE_URL } from "@/lib/api";
 
 interface Evento {
@@ -17,6 +18,9 @@ interface Evento {
   modalita: string;
   soglia_consecutiva: number;
   is_attivo: boolean;
+  form_slug?: string;
+  luogo?: string;
+  tipo_assemblea?: string;
 }
 
 interface RosterMember {
@@ -79,9 +83,14 @@ export default function EventArchive() {
   };
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  const [newType, setNewType] = useState("FORMAZIONE");
+  const [newType, setNewType] = useState("ASSEMBLEA");
   const [newModality, setNewModality] = useState("HYBRID");
   const [newDate, setNewDate] = useState(getInitialDate);
+  const [newTime, setNewTime] = useState("18:30");
+  const [newLocation, setNewLocation] = useState("Sede JEMORE");
+  const [newTipoAssemblea, setNewTipoAssemblea] = useState<"CAMBIO_RESP" | "CAMBIO_BOARD" | "STRATEGIA_BILANCIO">("CAMBIO_RESP");
+  const [createdAssembleaEvent, setCreatedAssembleaEvent] = useState<Evento | null>(null);
+  const [showConvocazioneModal, setShowConvocazioneModal] = useState(false);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -182,6 +191,16 @@ export default function EventArchive() {
     try {
       setCreating(true);
       const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
+      
+      let eventIso = new Date().toISOString();
+      if (newDate) {
+        const timePart = newTime && newTime.trim() ? newTime : "18:30";
+        const combined = new Date(`${newDate}T${timePart}:00`);
+        if (!isNaN(combined.getTime())) {
+          eventIso = combined.toISOString();
+        }
+      }
+
       const res = await fetch(`${API_BASE_URL}/api/events`, {
         method: "POST",
         headers: {
@@ -189,23 +208,37 @@ export default function EventArchive() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          titolo: newTitle,
+          titolo: newTitle.trim(),
           tipo: newType,
           modalita: newModality,
-          data_ora: newDate ? new Date(newDate).toISOString() : new Date().toISOString(),
+          data_ora: eventIso,
+          luogo: newLocation.trim(),
+          tipo_assemblea: newType === "ASSEMBLEA" ? newTipoAssemblea : undefined,
           soglia_consecutiva: 3, 
         }),
       });
 
-      if (!res.ok) throw new Error("Impossibile creare l'evento");
-      const createdEvent = await res.json();
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Impossibile creare l'evento");
+      }
+      
+      const createdEvent: Evento = await res.json();
 
       setNewTitle("");
+      setNewLocation("Sede JEMORE");
       setNewDate(getInitialDate());
+      setNewTime("18:30");
       setShowCreateForm(false);
       
-      // Redirect to the dashboard for the new event
-      window.location.href = `/dashboard?event_id=${createdEvent.id}`;
+      if (newType === "ASSEMBLEA") {
+        setCreatedAssembleaEvent(createdEvent);
+        setShowConvocazioneModal(true);
+        fetchEvents();
+      } else {
+        // Redirect to the dashboard for the new event
+        window.location.href = `/dashboard?event_id=${createdEvent.id}`;
+      }
     } catch (err: any) {
       alert(err.message || "Errore durante la creazione");
     } finally {
@@ -381,7 +414,7 @@ export default function EventArchive() {
                                     <p className="text-xl font-extrabold text-green-600 dark:text-green-500 mt-1">{stats.present} / {stats.total}</p>
                                   </div>
                                   <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-4 rounded-xl shadow-sm">
-                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Giustificati</p>
+                                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Delegati</p>
                                     <p className="text-xl font-extrabold text-yellow-600 dark:text-yellow-500 mt-1">{stats.excused}</p>
                                   </div>
                                   <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 p-4 rounded-xl shadow-sm">
@@ -390,26 +423,38 @@ export default function EventArchive() {
                                   </div>
                                 </div>
 
-                                {/* Action Buttons */}
-                                <div className="flex flex-wrap items-center justify-between bg-blue-50 border border-blue-100 p-4 rounded-xl gap-4">
-                                  <div className="flex items-center gap-2 text-sm text-[#1f295c] font-semibold">
-                                    <LayoutDashboard className="h-4 w-4 text-[#1f295c]" />
+                                {/* Action Buttons Bar */}
+                                <div className="flex flex-wrap items-center justify-between bg-zinc-900 border border-zinc-800 p-4 rounded-2xl gap-4 shadow-sm">
+                                  <div className="flex items-center gap-2.5 text-sm text-zinc-300 font-semibold">
+                                    <LayoutDashboard className="h-4 w-4 text-blue-400 shrink-0" />
                                     <span>Visualizza i dettagli delle presenze e gestisci l'evento dal vivo.</span>
                                   </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <Link href={`/dashboard?event_id=${evt.id}`}>
                                       <Button
                                         variant="primary"
-                                        className="gap-2 text-xs py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full"
+                                        className="gap-2 text-xs py-2 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-bold shadow-sm"
                                       >
                                         <LayoutDashboard className="h-4 w-4" /> Apri Dashboard
                                       </Button>
                                     </Link>
                                     {evt.tipo === "ASSEMBLEA" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCreatedAssembleaEvent(evt);
+                                          setShowConvocazioneModal(true);
+                                        }}
+                                        className="inline-flex items-center gap-1.5 text-xs py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-full transition-all shadow-sm cursor-pointer"
+                                      >
+                                        <MessageSquare className="h-4 w-4 text-white" /> Convocazione
+                                      </button>
+                                    )}
+                                    {evt.tipo === "ASSEMBLEA" && (
                                       <Button
                                         variant="success"
                                         onClick={() => triggerExport(evt.id, evt.titolo)}
-                                        className="gap-2 text-xs py-1.5 px-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-full"
+                                        className="gap-2 text-xs py-2 px-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-full shadow-sm"
                                       >
                                         <FileText className="h-4 w-4" /> Esporta Verbale
                                       </Button>
@@ -418,7 +463,7 @@ export default function EventArchive() {
                                       <Button
                                         variant="danger"
                                         onClick={() => handleDeleteEvent(evt.id, evt.titolo)}
-                                        className="gap-2 text-xs py-1.5 px-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-full ml-2"
+                                        className="gap-2 text-xs py-2 px-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-full shadow-sm ml-1"
                                       >
                                         <Trash2 className="h-4 w-4" /> Elimina Evento
                                       </Button>
@@ -464,11 +509,11 @@ export default function EventArchive() {
                               </div>
                             </div>
 
-                            {/* Giustificati Column */}
+                            {/* Delegati Column */}
                             <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl flex flex-col shadow-sm">
                               <div className="p-4 border-b border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-950 rounded-t-2xl">
                                 <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex justify-between items-center">
-                                  Giustificati
+                                  Delegati
                                   <span className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 py-0.5 px-2 rounded-full text-[10px]">
                                     {rosterData.roster.filter(m => m.status === "GIUSTIFICATO" || m.status === "ASSENTE_GIUSTIFICATO").length}
                                   </span>
@@ -476,7 +521,7 @@ export default function EventArchive() {
                               </div>
                               <div className="p-4 flex-1 flex flex-col gap-3">
                                 {rosterData.roster.filter(m => m.status === "GIUSTIFICATO" || m.status === "ASSENTE_GIUSTIFICATO").length === 0 ? (
-                                  <p className="text-sm text-gray-400 text-center py-4 italic">Nessun giustificato</p>
+                                  <p className="text-sm text-gray-400 text-center py-4 italic">Nessun delegato</p>
                                 ) : (
                                   rosterData.roster.filter(m => m.status === "GIUSTIFICATO" || m.status === "ASSENTE_GIUSTIFICATO").map(m => (
                                     <div key={m.socio_id} className="p-3 border border-gray-100 dark:border-zinc-800 rounded-lg hover:border-yellow-200 dark:hover:border-yellow-800 transition-colors">
@@ -563,7 +608,7 @@ export default function EventArchive() {
 
       {/* Create Event Modal / Drawer */}
       {showCreateForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-200 dark:border-zinc-800">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-zinc-800 flex justify-between items-center bg-blue-50 dark:bg-blue-900/20">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -579,15 +624,15 @@ export default function EventArchive() {
             
             <form onSubmit={handleCreateEvent} className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Titolo</label>
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Titolo Evento</label>
                   <input
                     type="text"
                     required
-                    placeholder="Es. Assemblea Ordinaria"
+                    placeholder="Es. Assemblea Generale - Cambio Resp"
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
 
@@ -596,10 +641,10 @@ export default function EventArchive() {
                   <select
                     value={newType}
                     onChange={(e) => setNewType(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 font-medium"
                   >
-                    <option value="FORMAZIONE">Formazione</option>
                     <option value="ASSEMBLEA">Assemblea</option>
+                    <option value="FORMAZIONE">Formazione</option>
                     <option value="TEAM_BUILDING">Team Building</option>
                   </select>
                 </div>
@@ -609,7 +654,7 @@ export default function EventArchive() {
                   <select
                     value={newModality}
                     onChange={(e) => setNewModality(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 font-medium"
                   >
                     <option value="HYBRID">Ibrida</option>
                     <option value="IN_PRESENZA">In Presenza</option>
@@ -617,14 +662,66 @@ export default function EventArchive() {
                   </select>
                 </div>
 
-                <div className="space-y-1 md:col-span-2">
+                {newType === "ASSEMBLEA" && (
+                  <div className="space-y-2 md:col-span-2 p-3.5 bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-xl">
+                    <label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase block">
+                      Tipologia Assemblea (Template Convocazione)
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: "CAMBIO_RESP", label: "Cambio Resp", emoji: "👥" },
+                        { id: "CAMBIO_BOARD", label: "Cambio Board", emoji: "🏛️" },
+                        { id: "STRATEGIA_BILANCIO", label: "Strategia / Bilancio", emoji: "📊" },
+                      ].map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setNewTipoAssemblea(t.id as any)}
+                          className={`flex items-center justify-center gap-1.5 py-2 px-2 text-xs font-bold rounded-lg border transition-all ${
+                            newTipoAssemblea === t.id
+                              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                              : "bg-white dark:bg-zinc-900 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-zinc-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          <span>{t.emoji}</span>
+                          <span className="truncate">{t.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1">
                   <label className="text-xs font-bold text-gray-500 uppercase">Data Evento</label>
                   <input
                     type="date"
                     required
                     value={newDate}
                     onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Orario Inizio</label>
+                  <input
+                    type="time"
+                    required
+                    value={newTime}
+                    onChange={(e) => setNewTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Luogo Evento</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Es. Sede JEMORE / Aula Magna Unimore / Via Campi 213"
+                    value={newLocation}
+                    onChange={(e) => setNewLocation(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -642,15 +739,25 @@ export default function EventArchive() {
                   variant="primary"
                   type="submit"
                   isLoading={creating}
-                  className="text-xs px-4 py-2"
+                  className="text-xs px-5 py-2.5 font-bold shadow-sm"
                 >
-                  Crea Evento
+                  {newType === "ASSEMBLEA" ? "Crea e Genera Messaggio Convocazione →" : "Crea Evento"}
                 </Button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Convocazione Modal */}
+      <ConvocazioneModal
+        isOpen={showConvocazioneModal}
+        onClose={() => setShowConvocazioneModal(false)}
+        event={createdAssembleaEvent}
+        onProceedToDashboard={(id) => {
+          window.location.href = `/dashboard?event_id=${id}`;
+        }}
+      />
     </div>
   );
 }

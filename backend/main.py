@@ -39,13 +39,14 @@ from sqlalchemy import text
 def init_db():
     try:
         Base.metadata.create_all(bind=engine)
-        # Ensure form_slug column exists in eventi table
+        # Ensure columns exist in eventi table
         with engine.connect() as conn:
-            try:
-                conn.execute(text("ALTER TABLE eventi ADD COLUMN form_slug VARCHAR"))
-                conn.commit()
-            except Exception:
-                pass
+            for col_name in ["form_slug", "luogo", "tipo_assemblea"]:
+                try:
+                    conn.execute(text(f"ALTER TABLE eventi ADD COLUMN {col_name} VARCHAR"))
+                    conn.commit()
+                except Exception:
+                    pass
         seed_database_if_empty()
         ensure_event_slugs()
     except Exception as e:
@@ -123,6 +124,8 @@ class EventCreate(BaseModel):
     data_ora: Optional[datetime] = None
     modalita: str  # "ONLINE_ONLY", "HYBRID", "IN_PERSON_ONLY"
     soglia_consecutiva: Optional[int] = 3
+    luogo: Optional[str] = None
+    tipo_assemblea: Optional[str] = None
 
 class EventResponse(BaseModel):
     id: int
@@ -133,6 +136,8 @@ class EventResponse(BaseModel):
     soglia_consecutiva: int
     is_attivo: bool
     form_slug: Optional[str] = None
+    luogo: Optional[str] = None
+    tipo_assemblea: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -207,8 +212,10 @@ async def create_event(
         tipo=event_in.tipo,
         data_ora=event_in.data_ora or datetime.utcnow(),
         modalita=event_in.modalita,
-        soglia_consecutiva=event_in.soglia_consecutiva,
-        is_attivo=True
+        soglia_consecutiva=event_in.soglia_consecutiva or 3,
+        is_attivo=True,
+        luogo=event_in.luogo,
+        tipo_assemblea=event_in.tipo_assemblea
     )
     db.add(new_event)
     db.commit()
@@ -808,6 +815,8 @@ def trigger_postgres_sync(
 @app.get("/api/events/{event_id}/export-minutes/csv")
 def export_minutes_csv(
     event_id: int,
+    ora_inizio: Optional[str] = Query(None, description="Ora inizio assemblea (HH:MM)"),
+    ora_fine: Optional[str] = Query(None, description="Ora scioglimento assemblea (HH:MM)"),
     quorum_pct: float = Query(0.5, description="Custom quorum threshold percentage"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_admin_or_it_manager)
@@ -818,7 +827,13 @@ def export_minutes_csv(
     """
     import reports
     try:
-        csv_bytes = reports.generate_minutes_csv(db, event_id, quorum_pct=quorum_pct)
+        csv_bytes = reports.generate_minutes_csv(
+            db, 
+            event_id, 
+            ora_inizio=ora_inizio, 
+            ora_fine=ora_fine, 
+            quorum_pct=quorum_pct
+        )
         return StreamingResponse(
             io.BytesIO(csv_bytes),
             media_type="text/csv",
@@ -832,6 +847,8 @@ def export_minutes_csv(
 @app.get("/api/events/{event_id}/export-minutes/pdf")
 def export_minutes_pdf(
     event_id: int,
+    ora_inizio: Optional[str] = Query(None, description="Ora inizio assemblea (HH:MM)"),
+    ora_fine: Optional[str] = Query(None, description="Ora scioglimento assemblea (HH:MM)"),
     quorum_pct: float = Query(0.5, description="Custom quorum threshold percentage"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_admin_or_it_manager)
@@ -842,7 +859,13 @@ def export_minutes_pdf(
     """
     import reports
     try:
-        pdf_bytes = reports.generate_minutes_pdf(db, event_id, quorum_pct=quorum_pct)
+        pdf_bytes = reports.generate_minutes_pdf(
+            db, 
+            event_id, 
+            ora_inizio=ora_inizio, 
+            ora_fine=ora_fine, 
+            quorum_pct=quorum_pct
+        )
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type="application/pdf",

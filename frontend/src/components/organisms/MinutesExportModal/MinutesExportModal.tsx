@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, FileText, Download } from "lucide-react";
+import { X, FileText, Download, Loader2 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/atoms/Button/Button";
 import { API_BASE_URL } from "@/lib/api";
 import { MinutesExportModalProps } from "./MinutesExportModal.types";
@@ -12,15 +13,62 @@ export const MinutesExportModal: React.FC<MinutesExportModalProps> = ({
   eventId,
   eventTitle,
 }) => {
-  const [quorumPct, setQuorumPct] = useState<number>(50);
+  const { data: session } = useSession();
+  const [isExporting, setIsExporting] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleExport = (format: "pdf" | "csv") => {
-    const quorumValue = quorumPct / 100;
-    const downloadUrl = `${API_BASE_URL}/api/events/${eventId}/export-minutes/${format}?quorum_pct=${quorumValue}`;
-    // Trigger download in a new tab or iframe
-    window.open(downloadUrl, "_blank");
+  const handleExport = async (format: "pdf" | "csv") => {
+    setIsExporting(format);
+    try {
+      let timeParams = "";
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem(`assemblea_announcement_${eventId}`);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed.time) {
+              timeParams += `&ora_inizio=${encodeURIComponent(parsed.time)}`;
+            }
+            if (parsed.endTime) {
+              timeParams += `&ora_fine=${encodeURIComponent(parsed.endTime)}`;
+            }
+          } catch {}
+        }
+      }
+
+      const downloadUrl = `${API_BASE_URL}/api/events/${eventId}/export-minutes/${format}?quorum_pct=0.5${timeParams}`;
+      
+      const headers: Record<string, string> = {};
+      const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(downloadUrl, {
+        headers,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Errore durante il download del verbale (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      const cleanTitle = eventTitle.replace(/[^a-zA-Z0-9_-]/g, "_");
+      link.download = `verbale_${cleanTitle}_${eventId}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(link);
+    } catch (err: any) {
+      alert(err.message || "Errore durante l'esportazione");
+    } finally {
+      setIsExporting(null);
+    }
   };
 
   return (
@@ -52,60 +100,51 @@ export const MinutesExportModal: React.FC<MinutesExportModalProps> = ({
         {/* Content */}
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              Evento:
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+              Evento Selezionato
             </p>
-            <p className="text-base font-bold text-gray-900 dark:text-white">
+            <p className="text-base font-bold text-gray-900 dark:text-white mt-0.5">
               {eventTitle}
             </p>
           </div>
 
-          <div>
-            <label
-              htmlFor="quorum-pct"
-              className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1"
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Scegli il formato in cui desideri scaricare il verbale ufficiale contenente il calcolo presenze, deleghe e quorum:
+          </p>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button
+              onClick={() => handleExport("pdf")}
+              disabled={isExporting !== null}
+              className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/20 hover:bg-red-100/70 dark:hover:bg-red-900/30 transition-all text-red-700 dark:text-red-300 font-semibold text-sm group disabled:opacity-50"
             >
-              Soglia Quorum (%)
-            </label>
-            <div className="relative rounded-md shadow-sm">
-              <input
-                type="number"
-                name="quorum-pct"
-                id="quorum-pct"
-                min="1"
-                max="100"
-                value={quorumPct}
-                onChange={(e) => setQuorumPct(Number(e.target.value))}
-                className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 text-sm font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 dark:text-gray-400 sm:text-sm font-bold">%</span>
-              </div>
-            </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Default 50%. Definisce la percentuale minima di membri attivi necessaria per validare l'assemblea.
-            </p>
+              {isExporting === "pdf" ? (
+                <Loader2 className="h-7 w-7 animate-spin text-red-600" />
+              ) : (
+                <FileText className="h-7 w-7 text-red-600 group-hover:scale-110 transition-transform" />
+              )}
+              <span>Documento PDF</span>
+            </button>
+
+            <button
+              onClick={() => handleExport("csv")}
+              disabled={isExporting !== null}
+              className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30 transition-all text-emerald-700 dark:text-emerald-300 font-semibold text-sm group disabled:opacity-50"
+            >
+              {isExporting === "csv" ? (
+                <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+              ) : (
+                <Download className="h-7 w-7 text-emerald-600 group-hover:scale-110 transition-transform" />
+              )}
+              <span>Foglio CSV</span>
+            </button>
           </div>
         </div>
 
         {/* Footer actions */}
         <div className="mt-6 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-zinc-800 pt-4">
           <Button variant="secondary" onClick={onClose} className="text-sm">
-            Annulla
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => handleExport("csv")}
-            className="gap-2 text-sm"
-          >
-            <Download className="h-4 w-4" /> CSV
-          </Button>
-          <Button
-            variant="success"
-            onClick={() => handleExport("pdf")}
-            className="gap-2 text-sm bg-green-600 hover:bg-green-700 text-white"
-          >
-            <Download className="h-4 w-4" /> PDF Verbale
+            Chiudi
           </Button>
         </div>
       </div>

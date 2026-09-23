@@ -124,7 +124,7 @@ export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
             <option value="ALL">Tutti gli Stati</option>
             <option value="IN_PRESENZA">In Presenza</option>
             <option value="ONLINE">Online</option>
-            <option value="ASSENTE_GIUSTIFICATO">Giustificati</option>
+            <option value="ASSENTE_GIUSTIFICATO">Delegati</option>
             <option value="PRE_REGISTRATO">Pre-Registrati</option>
             <option value="ASSENTE">Assenti</option>
           </select>
@@ -290,11 +290,11 @@ export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
                             Online
                           </button>
 
-                          {/* Giustifica button */}
+                          {/* Delega button */}
                           <button
                             onClick={() => handleGiustifica(member.socio_id)}
                             disabled={isExcused}
-                            title="Segna giustificato"
+                            title="Segna delegato"
                             className={`flex items-center gap-1 px-2 py-1 rounded border text-xs font-semibold transition-colors ${
                               isExcused
                                 ? "bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800/50 cursor-default"
@@ -302,7 +302,7 @@ export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
                             } disabled:opacity-60`}
                           >
                             <ShieldCheck className="h-3.5 w-3.5" />
-                            Giustifica
+                            Delega
                           </button>
 
                           {/* Assente button */}
@@ -338,7 +338,7 @@ export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-800/50 rounded"></span>
-            Giustificato
+            Delegato
           </span>
         </div>
       </div>
@@ -350,7 +350,7 @@ export const LiveRosterTable: React.FC<LiveRosterTableProps> = ({
             <div className="px-6 py-4 border-b border-gray-200 dark:border-zinc-800 flex justify-between items-center bg-blue-50 dark:bg-blue-900/20">
               <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5" />
-                Registra Giustificazione / Delega
+                Registra Delega
               </h3>
               <button 
                 onClick={() => setShowDelegaModal(false)}
