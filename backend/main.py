@@ -519,7 +519,12 @@ async def register_delega(
         db_modalita = "PRE_REGISTRATO"
         is_prereg = True
     elif modalita == "ASSENTE":
-        db_modalita = "GIUSTIFICATO"
+        if delega_a and delega_a.strip() and delega_a.strip().lower() not in ["nessuno", "nessuna", "no", "-", "none", "null"]:
+            db_modalita = "GIUSTIFICATO"
+            delega_a = delega_a.strip()
+        else:
+            db_modalita = "ASSENTE"
+            delega_a = None
 
     # 3. Registra nel database, `checkin_member` controllerà il limite delle 3 deleghe
     result = services.checkin_member(

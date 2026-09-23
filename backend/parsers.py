@@ -209,25 +209,30 @@ def parse_pre_assembly_csv(db: Session, event_id: int, csv_content: str) -> dict
                 count_errors += 1
                 continue
                 
+            # Clean and sanitize delegation value
+            clean_delega = delega_val.strip() if delega_val else ""
+            if clean_delega.lower() in ["nessuno", "nessuna", "no", "-", "none", "null", "n/a", "na"]:
+                clean_delega = ""
+
             # Determine presence modality:
             is_absent = "no" in attendance_val or "non" in attendance_val or "assente" in attendance_val
             is_online = "online" in attendance_val
             is_in_person = "presenza" in attendance_val
-            has_proxy = bool(delega_val)
+            has_proxy = bool(clean_delega)
             
-            if is_absent or has_proxy:
+            if has_proxy:
                 modalita = "GIUSTIFICATO"
-            elif is_online:
-                modalita = "ONLINE"
-            elif is_in_person:
-                modalita = "IN_PRESENZA"
+            elif is_absent:
+                modalita = "ASSENTE"
+            elif is_online or is_in_person:
+                modalita = "PRE_REGISTRATO"
             else:
                 modalita = "PRE_REGISTRATO"
                 
             # Perform delegate lookup
             delegato_id_val = None
-            if modalita == "GIUSTIFICATO" and delega_val:
-                delegato_socio = find_socio_by_name_or_email(db, delega_val)
+            if modalita == "GIUSTIFICATO" and clean_delega:
+                delegato_socio = find_socio_by_name_or_email(db, clean_delega)
                 if delegato_socio:
                     delegato_id_val = delegato_socio.id
                 
@@ -239,18 +244,16 @@ def parse_pre_assembly_csv(db: Session, event_id: int, csv_content: str) -> dict
             
             if presence:
                 presence.modalita = modalita
-                presence.delega_a = delega_val if modalita == "GIUSTIFICATO" else None
+                presence.delega_a = clean_delega if modalita == "GIUSTIFICATO" else None
                 presence.delegante_id = socio.id if modalita == "GIUSTIFICATO" else None
                 presence.delegato_id = delegato_id_val if modalita == "GIUSTIFICATO" else None
-                
-                if modalita == "PRE_REGISTRATO":
-                    presence.is_preregistrato = True
+                presence.is_preregistrato = (modalita == "PRE_REGISTRATO")
             else:
                 presence = Presenza(
                     evento_id=event_id,
                     socio_id=socio.id,
                     modalita=modalita,
-                    delega_a=delega_val if modalita == "GIUSTIFICATO" else None,
+                    delega_a=clean_delega if modalita == "GIUSTIFICATO" else None,
                     delegante_id=socio.id if modalita == "GIUSTIFICATO" else None,
                     delegato_id=delegato_id_val if modalita == "GIUSTIFICATO" else None,
                     durata_minuti=0,
@@ -260,6 +263,8 @@ def parse_pre_assembly_csv(db: Session, event_id: int, csv_content: str) -> dict
                 
             if modalita == "GIUSTIFICATO":
                 count_giustificati += 1
+            elif modalita == "ASSENTE":
+                count_assenti = locals().get("count_assenti", 0) + 1
             else:
                 count_preregistrati += 1
                 
@@ -271,6 +276,7 @@ def parse_pre_assembly_csv(db: Session, event_id: int, csv_content: str) -> dict
     return {
         "status": "success",
         "giustificati": count_giustificati,
+        "assenti": locals().get("count_assenti", 0),
         "preregistrati": count_preregistrati,
         "errors": count_errors
     }
