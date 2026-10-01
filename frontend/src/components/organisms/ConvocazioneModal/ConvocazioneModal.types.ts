@@ -10,5 +10,7 @@ export interface ConvocazioneModalProps {
     tipo_assemblea?: string;
   } | null;
   onProceedToDashboard?: (eventId: number) => void;
+  onEventUpdated?: (updatedEvent: any) => void;
 }
+
 

@@ -4,7 +4,7 @@ import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { getAuthHeaders } from "@/lib/msal";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 import { Button } from "@/components/atoms/Button/Button";
 import {
   UserCheck,
@@ -15,6 +15,7 @@ import {
   Wifi,
   MapPin,
   Loader2,
+  RotateCcw,
 } from "lucide-react";
 
 interface RegistryMember {
@@ -35,7 +36,15 @@ function CheckInContent() {
   const searchParams = useSearchParams();
   const eventIdParam = searchParams.get("event_id");
 
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession({
+    required: true,
+    onUnauthenticated() {
+      if (typeof window !== "undefined") {
+        window.location.href =
+          "/login?callbackUrl=" + encodeURIComponent(window.location.pathname + window.location.search);
+      }
+    },
+  });
   const [registry, setRegistry] = useState<RegistryMember[]>([]);
   const [selectedEmail, setSelectedEmail] = useState("");
   const [modality, setModality] = useState<"IN_PRESENZA" | "ONLINE">("IN_PRESENZA");
@@ -52,7 +61,7 @@ function CheckInContent() {
       if (!eventIdParam) return;
       try {
         setEventLoading(true);
-        const res = await fetch(`${API_BASE_URL}/api/events/${eventIdParam}`);
+        const res = await apiFetch(`${API_BASE_URL}/api/events/${eventIdParam}`, {}, session);
         if (res.ok) {
           const data = await res.json();
           setEventInfo(data);
@@ -68,7 +77,7 @@ function CheckInContent() {
 
     const loadRegistry = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/streaks`);
+        const res = await apiFetch(`${API_BASE_URL}/api/streaks`, {}, session);
         if (res.ok) {
           const data = await res.json();
           const list: RegistryMember[] = data.map((m: any) => ({
@@ -87,7 +96,7 @@ function CheckInContent() {
 
     loadEvent();
     loadRegistry();
-  }, [eventIdParam]);
+  }, [eventIdParam, session]);
 
   const handleLogout = () => {
     signOut({ callbackUrl: '/login' });
@@ -106,19 +115,17 @@ function CheckInContent() {
 
     try {
       const tokenStr = searchParams?.get("token") || "";
-      const token = (session as any)?.idToken;
-      const res = await fetch(`${API_BASE_URL}/api/checkin`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/checkin`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           event_id: Number(eventIdParam),
           modalita: modality,
           token: tokenStr
         }),
-      });
+      }, session);
 
       const data = await res.json();
       if (!res.ok) {

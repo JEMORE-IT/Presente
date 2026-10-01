@@ -2,10 +2,21 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from models import Socio, Evento, Presenza, UnmatchedLog
 
-def checkin_member(db: Session, email: str, event_id: int, modalita: str, name_fallback: str = None, durata_minuti: int = 0, delega_a: str = None, intolleranze: str = None) -> dict:
+def checkin_member(
+    db: Session, 
+    email: str, 
+    event_id: int, 
+    modalita: str, 
+    name_fallback: str = None, 
+    durata_minuti: int = 0, 
+    delega_a: str = None, 
+    intolleranze: str = None,
+    is_admin: bool = False
+) -> dict:
     """
     Checks in a member for an event.
     If the member is found by email, a Presenza record is created/updated.
+    Enforces a 30-minute lock after first compilation for normal users (unless is_admin=True).
     If the member is not found, the details are logged in UnmatchedLog.
     """
     # Verify event exists and is active
@@ -20,22 +31,6 @@ def checkin_member(db: Session, email: str, event_id: int, modalita: str, name_f
     socio = db.query(Socio).filter(Socio.email == email.strip().lower()).first()
     
     if socio:
-        # --- Max 3 deleghe per delegato validation ---
-        # If this checkin carries a delegation, check how many delegations the target already holds
-        if delega_a:
-            MAX_DELEGHE = 3
-            existing_deleghe_count = db.query(Presenza).filter(
-                Presenza.evento_id == event_id,
-                Presenza.delega_a == delega_a,
-                Presenza.socio_id != socio.id  # Don't count this member's own (possible existing) delegation
-            ).count()
-            if existing_deleghe_count >= MAX_DELEGHE:
-                from fastapi import HTTPException
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Il delegato '{delega_a}' ha già raggiunto il massimo di {MAX_DELEGHE} deleghe per questo evento."
-                )
-
         # Check if already has a presence record
         presence = db.query(Presenza).filter(
             Presenza.evento_id == event_id,
@@ -43,6 +38,38 @@ def checkin_member(db: Session, email: str, event_id: int, modalita: str, name_f
         ).first()
         
         if presence:
+            # 30-minute presence modification lock for regular users
+            if not is_admin and presence.registrato_il:
+                import datetime
+                now_utc = datetime.datetime.utcnow()
+                reg_time = presence.registrato_il
+                if reg_time.tzinfo is not None:
+                    reg_time = reg_time.replace(tzinfo=None)
+                
+                elapsed_seconds = (now_utc - reg_time).total_seconds()
+                if elapsed_seconds > 30 * 60:
+                    from fastapi import HTTPException
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Sono trascorsi più di 30 minuti dalla tua compilazione della presenza per questo evento. Non è più possibile modificarla in autonomia. Contatta il Segretario Generale (SG) per la modifica manuale dalla Dashboard."
+                    )
+
+            # --- Max 3 deleghe per delegato validation ---
+            # If this checkin carries a delegation, check how many delegations the target already holds
+            if delega_a:
+                MAX_DELEGHE = 3
+                existing_deleghe_count = db.query(Presenza).filter(
+                    Presenza.evento_id == event_id,
+                    Presenza.delega_a == delega_a,
+                    Presenza.socio_id != socio.id  # Don't count this member's own delegation
+                ).count()
+                if existing_deleghe_count >= MAX_DELEGHE:
+                    from fastapi import HTTPException
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Il delegato '{delega_a}' ha già raggiunto il massimo di {MAX_DELEGHE} deleghe per questo evento."
+                    )
+
             presence.modalita = modalita
             presence.durata_minuti = max(presence.durata_minuti, durata_minuti)
             if modalita != "GIUSTIFICATO":
@@ -53,16 +80,31 @@ def checkin_member(db: Session, email: str, event_id: int, modalita: str, name_f
             if intolleranze is not None:
                 presence.intolleranze = intolleranze
             
-            import datetime
-            presence.registrato_il = datetime.datetime.utcnow()
+            # Keep original registrato_il so the 30-min window counts from initial registration
         else:
+            # --- Max 3 deleghe per delegato validation ---
+            if delega_a:
+                MAX_DELEGHE = 3
+                existing_deleghe_count = db.query(Presenza).filter(
+                    Presenza.evento_id == event_id,
+                    Presenza.delega_a == delega_a
+                ).count()
+                if existing_deleghe_count >= MAX_DELEGHE:
+                    from fastapi import HTTPException
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Il delegato '{delega_a}' ha già raggiunto il massimo di {MAX_DELEGHE} deleghe per questo evento."
+                    )
+
+            import datetime
             presence = Presenza(
                 evento_id=event_id,
                 socio_id=socio.id,
                 modalita=modalita,
                 durata_minuti=durata_minuti,
                 delega_a=delega_a if modalita == "GIUSTIFICATO" else None,
-                intolleranze=intolleranze
+                intolleranze=intolleranze,
+                registrato_il=datetime.datetime.utcnow()
             )
             db.add(presence)
             

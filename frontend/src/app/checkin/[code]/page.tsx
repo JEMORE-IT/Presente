@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, use } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 import { Button } from "@/components/atoms/Button/Button";
 import {
   UserCheck,
@@ -31,7 +31,15 @@ export default function CheckinCodePage({
   params: Promise<{ code: string }>;
 }) {
   const { code } = use(params);
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession({
+    required: true,
+    onUnauthenticated() {
+      if (typeof window !== "undefined") {
+        window.location.href =
+          "/login?callbackUrl=" + encodeURIComponent(window.location.pathname);
+      }
+    },
+  });
 
   const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
   const [eventLoading, setEventLoading] = useState(true);
@@ -50,7 +58,7 @@ export default function CheckinCodePage({
       try {
         setEventLoading(true);
         setEventError(null);
-        const res = await fetch(`${API_BASE_URL}/api/checkin/qr/${encodeURIComponent(code)}`);
+        const res = await apiFetch(`${API_BASE_URL}/api/checkin/qr/${encodeURIComponent(code)}`, {}, session);
         if (!res.ok) {
           const errData = await res.json().catch(() => null);
           throw new Error(errData?.detail || "Codice QR non valido o scaduto (validità 24 ore).");
@@ -70,7 +78,7 @@ export default function CheckinCodePage({
     }
 
     loadEventByCode();
-  }, [code]);
+  }, [code, session]);
 
   const handleLogout = () => {
     signOut({ callbackUrl: "/login" });
@@ -88,18 +96,16 @@ export default function CheckinCodePage({
     setError("");
 
     try {
-      const token = (session as any)?.idToken;
-      const res = await fetch(`${API_BASE_URL}/api/checkin`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/checkin`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           code: code,
           modalita: modality,
         }),
-      });
+      }, session);
 
       const data = await res.json();
       if (!res.ok) {
@@ -222,6 +228,9 @@ export default function CheckinCodePage({
               <RotateCcw className="h-3.5 w-3.5" />
               Modifica modalità presenza
             </button>
+            <p className="text-[11px] text-gray-400 mt-2">
+              Puoi modificare la risposta entro 30 minuti dalla registrazione. Trascorsi 30 minuti, per eventuali modifiche contatta il Segretario Generale (SG).
+            </p>
           </div>
         </div>
       </main>

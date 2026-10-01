@@ -9,7 +9,7 @@ import { QrProjectorModal } from "@/components/organisms/QrProjectorModal/QrProj
 import { MinutesExportModal } from "@/components/organisms/MinutesExportModal/MinutesExportModal";
 import { Users, UserCheck, Calendar, UserX, AlertCircle, QrCode, Upload, FileText, X, CheckCircle2, ChevronDown } from "lucide-react";
 import { AssembleaAnnouncementModal } from "@/components/organisms/AssembleaAnnouncementModal/AssembleaAnnouncementModal";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 
 interface Evento {
   id: number;
@@ -25,12 +25,15 @@ interface Evento {
 }
 
 export default function Dashboard() {
-  const { data: session } = useSession();
-
-  const getAuthHeaders = (): Record<string, string> => {
-    const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
+  const { data: session, status } = useSession({
+    required: true,
+    onUnauthenticated() {
+      if (typeof window !== "undefined") {
+        window.location.href =
+          "/login?callbackUrl=" + encodeURIComponent(window.location.pathname + window.location.search);
+      }
+    },
+  });
 
   const [members, setMembers] = useState<RosterMember[]>([]);
   const [events, setEvents] = useState<Evento[]>([]);
@@ -113,9 +116,7 @@ export default function Dashboard() {
       setError("");
 
       // Fetch events
-      const eventsRes = await fetch(`${API_BASE_URL}/api/events`, {
-        headers: getAuthHeaders(),
-      });
+      const eventsRes = await apiFetch(`${API_BASE_URL}/api/events`, {}, session);
       if (!eventsRes.ok) throw new Error("Errore nel recupero degli eventi");
       const eventsData = await eventsRes.json();
       setEvents(eventsData);
@@ -143,9 +144,7 @@ export default function Dashboard() {
   const fetchEventRoster = async (eventId: number) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/roster`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/roster`, {}, session);
       if (!res.ok) throw new Error("Errore nel recupero roster dell'evento");
       const data = await res.json();
       // Map "status" from API to "attendance_status" for the frontend
@@ -157,14 +156,17 @@ export default function Dashboard() {
       setMembers(mappedRoster);
     } catch (err: any) {
       console.error(err);
+      setError("Errore nel caricamento del roster");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (session?.user) {
+      fetchData();
+    }
+  }, [session?.user]);
 
   useEffect(() => {
     if (selectedEventId) {
@@ -293,11 +295,10 @@ export default function Dashboard() {
     );
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/checkin/manual`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/checkin/manual`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           socio_id: socioId,
@@ -305,7 +306,7 @@ export default function Dashboard() {
           modalita: status,
           delega_a: delega_a || null,
         }),
-      });
+      }, session);
 
       const data = await res.json().catch(() => ({}));
 
@@ -333,11 +334,10 @@ export default function Dashboard() {
 
     try {
       setError("");
-      const res = await fetch(`${API_BASE_URL}/api/events/${selectedEventId}/import-pre-assembly`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/events/${selectedEventId}/import-pre-assembly`, {
         method: "POST",
-        headers: getAuthHeaders(),
         body: formData,
-      });
+      }, session);
 
       if (!res.ok) {
         const data = await res.json();
@@ -364,11 +364,10 @@ export default function Dashboard() {
 
     try {
       setError("");
-      const res = await fetch(`${API_BASE_URL}/api/events/${selectedEventId}/import-teams`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/events/${selectedEventId}/import-teams`, {
         method: "POST",
-        headers: getAuthHeaders(),
         body: formData,
-      });
+      }, session);
 
       if (!res.ok) {
         const data = await res.json();

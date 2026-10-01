@@ -8,7 +8,7 @@ import { Button } from "@/components/atoms/Button/Button";
 import { StatusBadge } from "@/components/atoms/StatusBadge/StatusBadge";
 import { MinutesExportModal } from "@/components/organisms/MinutesExportModal/MinutesExportModal";
 import { ConvocazioneModal } from "@/components/organisms/ConvocazioneModal/ConvocazioneModal";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 
 interface Evento {
   id: number;
@@ -46,7 +46,14 @@ interface EventRosterResponse {
 }
 
 export default function EventArchive() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession({
+    required: true,
+    onUnauthenticated() {
+      if (typeof window !== "undefined") {
+        window.location.href = "/login?callbackUrl=" + encodeURIComponent(window.location.pathname);
+      }
+    },
+  });
   const userRole = ((session?.user as any)?.ruolo || "").toLowerCase();
   const userName = (session?.user?.name || "").toLowerCase();
   const userEmail = (session?.user?.email || "").toLowerCase();
@@ -94,8 +101,10 @@ export default function EventArchive() {
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    fetchEvents();
-  }, []);
+    if (session?.user) {
+      fetchEvents();
+    }
+  }, [session?.user]);
 
   const handleDeleteEvent = async (eventId: number, eventTitle: string) => {
     if (!isAuthorized) return;
@@ -104,12 +113,9 @@ export default function EventArchive() {
     }
     
     try {
-      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/events/${eventId}`, {
         method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${(session as any)?.idToken || ""}`
-        }
-      });
+      }, session);
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.detail || "Errore durante l'eliminazione dell'evento");
@@ -129,10 +135,7 @@ export default function EventArchive() {
     try {
       setLoading(true);
       setError("");
-      const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
-      const res = await fetch(`${API_BASE_URL}/api/events`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await apiFetch(`${API_BASE_URL}/api/events`, {}, session);
       if (!res.ok) throw new Error("Errore nel caricamento degli eventi");
       const data = await res.json();
       setEvents(data);
@@ -155,10 +158,7 @@ export default function EventArchive() {
     setLoadingRoster(true);
 
     try {
-      const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
-      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/roster`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/roster`, {}, session);
       if (!res.ok) throw new Error("Errore nel caricamento del roster dell'evento");
       const data = await res.json();
       setRosterData(data);
@@ -190,7 +190,6 @@ export default function EventArchive() {
 
     try {
       setCreating(true);
-      const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
       
       let eventIso = new Date().toISOString();
       if (newDate) {
@@ -201,11 +200,10 @@ export default function EventArchive() {
         }
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/events`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/events`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           titolo: newTitle.trim(),
@@ -216,7 +214,7 @@ export default function EventArchive() {
           tipo_assemblea: newType === "ASSEMBLEA" ? newTipoAssemblea : undefined,
           soglia_consecutiva: 3, 
         }),
-      });
+      }, session);
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -754,6 +752,14 @@ export default function EventArchive() {
         isOpen={showConvocazioneModal}
         onClose={() => setShowConvocazioneModal(false)}
         event={createdAssembleaEvent}
+        onEventUpdated={(updated) => {
+          setEvents((prev) =>
+            prev.map((e) => (e.id === updated.id ? { ...e, ...updated } : e))
+          );
+          setCreatedAssembleaEvent((prev) =>
+            prev ? { ...prev, ...updated } : null
+          );
+        }}
         onProceedToDashboard={(id) => {
           window.location.href = `/dashboard?event_id=${id}`;
         }}

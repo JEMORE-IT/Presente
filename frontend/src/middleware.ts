@@ -6,17 +6,20 @@ export default withAuth(
     const { pathname } = req.nextUrl;
     const user = req.nextauth.token;
 
-    // Le rotte pubbliche o aperte a tutti i membri @jemore.it
+    // Public auth routes
+    if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+      return NextResponse.next();
+    }
+
+    // Checkin and Partecipazione pages are accessible to all authenticated @jemore.it members
     if (
       pathname.startsWith("/checkin") ||
-      pathname.startsWith("/partecipazione") ||
-      pathname.startsWith("/login") ||
-      pathname.startsWith("/api/auth")
+      pathname.startsWith("/partecipazione")
     ) {
       return NextResponse.next();
     }
 
-    // Rotte riservate al Board, Responsabili, Manager e IT
+    // Administrative routes (Dashboard, Eventi, Analytics) reserved for Board, Responsabili, Manager and IT
     const ruolo = (user?.ruolo as string)?.toLowerCase() || "";
     const area_lavoro = (user?.area_lavoro as string)?.toLowerCase() || "";
     const email = (user?.email as string)?.toLowerCase() || "";
@@ -32,7 +35,7 @@ export default withAuth(
       ruolo === "co" ||
       ruolo.includes("presidente") ||
       ruolo.includes("tesoriere") ||
-      ruolo.includes("segretario generale") ||
+      ruolo.includes("segretario") ||
       area_lavoro.includes("board") ||
       area_lavoro.includes("responsabile") ||
       area_lavoro === "it" ||
@@ -43,7 +46,6 @@ export default withAuth(
       name.includes("joachim");
 
     if (!isBoardOrResponsabile) {
-      // Restituisce 403 Forbidden o reindirizza a una pagina di errore 403
       return new NextResponse("403 Forbidden - Accesso riservato al Board/Responsabili", { status: 403 });
     }
 
@@ -52,16 +54,18 @@ export default withAuth(
   {
     callbacks: {
       authorized: ({ req, token }) => {
-        // Allow unauthenticated users to access /checkin, /partecipazione, /login so they can see custom login
+        // Only login and NextAuth API are public; all other routes require a valid session token
         if (
-          req.nextUrl.pathname.startsWith("/checkin") ||
-          req.nextUrl.pathname.startsWith("/partecipazione") ||
-          req.nextUrl.pathname.startsWith("/login")
+          req.nextUrl.pathname.startsWith("/login") ||
+          req.nextUrl.pathname.startsWith("/api/auth")
         ) {
           return true;
         }
-        return !!token; // Assicura che l'utente sia loggato per le altre rotte
+        return !!token;
       },
+    },
+    pages: {
+      signIn: "/login",
     },
   }
 );
@@ -69,3 +73,4 @@ export default withAuth(
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };
+

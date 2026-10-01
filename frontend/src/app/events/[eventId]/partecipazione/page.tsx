@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { ShieldAlert, AlertCircle, X, FileUp, CheckCircle2 } from "lucide-react";
 import { Select } from "@/components/atoms/Select/Select";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 
 export default function PartecipazioneForm({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
@@ -14,7 +14,9 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
     required: true,
     onUnauthenticated() {
       // Redirect to login if not authenticated
-      window.location.href = "/login?callbackUrl=" + encodeURIComponent(window.location.pathname);
+      if (typeof window !== "undefined") {
+        window.location.href = "/login?callbackUrl=" + encodeURIComponent(window.location.pathname);
+      }
     },
   });
 
@@ -38,7 +40,7 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
   useEffect(() => {
     async function fetchEventDetails() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/events/${eventId}`);
+        const res = await apiFetch(`${API_BASE_URL}/api/events/${eventId}`, {}, session);
         if (res.ok) {
           const data = await res.json();
           setEventTitle(data.titolo || "");
@@ -47,16 +49,16 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
         console.error("Failed to load event details", e);
       }
     }
-    if (eventId) {
+    if (eventId && session?.user) {
       fetchEventDetails();
     }
-  }, [eventId]);
+  }, [eventId, session]);
 
   // Fetch list of soci for dropdown
   useEffect(() => {
     async function fetchSoci() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/soci`);
+        const res = await apiFetch(`${API_BASE_URL}/api/soci`, {}, session);
         if (res.ok) {
           const data = await res.json();
           setSoci(data.map((s: any) => ({
@@ -68,8 +70,10 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
         console.error("Failed to load soci");
       }
     }
-    fetchSoci();
-  }, []);
+    if (session?.user) {
+      fetchSoci();
+    }
+  }, [session]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,10 +99,10 @@ export default function PartecipazioneForm({ params }: { params: Promise<{ event
         if (file) formData.append("file", file);
       }
       
-      const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/delega`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/delega`, {
         method: "POST",
         body: formData,
-      });
+      }, session);
       
       const data = await res.json().catch(() => null);
       

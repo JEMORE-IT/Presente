@@ -127,6 +127,15 @@ class EventCreate(BaseModel):
     luogo: Optional[str] = None
     tipo_assemblea: Optional[str] = None
 
+class EventUpdate(BaseModel):
+    titolo: Optional[str] = None
+    data_ora: Optional[datetime] = None
+    luogo: Optional[str] = None
+    tipo: Optional[str] = None
+    modalita: Optional[str] = None
+    tipo_assemblea: Optional[str] = None
+    is_attivo: Optional[bool] = None
+
 class EventResponse(BaseModel):
     id: int
     titolo: str
@@ -351,6 +360,51 @@ def get_event(event_id: int, db: Session = Depends(get_db)):
         db.commit()
     return event
 
+@app.patch("/api/events/{event_id}", response_model=EventResponse)
+@app.put("/api/events/{event_id}", response_model=EventResponse)
+async def update_event(
+    event_id: int,
+    payload: EventUpdate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
+    """
+    Updates an event's details (titolo, data_ora, luogo, tipo_assemblea, etc.).
+    Restricted to Board and IT Manager.
+    """
+    event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento non trovato")
+        
+    if payload.titolo is not None and payload.titolo.strip():
+        event.titolo = payload.titolo.strip()
+    if payload.data_ora is not None:
+        event.data_ora = payload.data_ora
+    if payload.luogo is not None:
+        event.luogo = payload.luogo.strip()
+    if payload.tipo is not None:
+        event.tipo = payload.tipo
+    if payload.modalita is not None:
+        event.modalita = payload.modalita
+    if payload.tipo_assemblea is not None:
+        event.tipo_assemblea = payload.tipo_assemblea
+    if payload.is_attivo is not None:
+        event.is_attivo = payload.is_attivo
+
+    db.commit()
+    db.refresh(event)
+
+    # Broadcast update to SSE listeners
+    await broadcast_to_sse("EVENT_UPDATED", {
+        "id": event.id,
+        "titolo": event.titolo,
+        "data_ora": event.data_ora.isoformat() if event.data_ora else None,
+        "luogo": event.luogo,
+        "tipo_assemblea": event.tipo_assemblea
+    })
+
+    return event
+
 @app.delete("/api/events/{event_id}")
 def delete_event(event_id: int, db: Session = Depends(get_db), current_user: dict = Depends(require_admin_or_it_manager)):
     """
@@ -456,7 +510,8 @@ async def manual_checkin(
         event_id=payload.event_id,
         modalita=payload.modalita,
         name_fallback=socio.nome,
-        delega_a=payload.delega_a
+        delega_a=payload.delega_a,
+        is_admin=True
     )
     
     # Always include event_id and modalita in SSE payload so dashboard can filter correctly

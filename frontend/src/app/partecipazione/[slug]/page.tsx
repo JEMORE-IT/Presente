@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { ShieldAlert, AlertCircle, X, FileUp, CheckCircle2, RotateCcw, Loader2 } from "lucide-react";
 import { Select } from "@/components/atoms/Select/Select";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 
 interface EventData {
   id: number;
@@ -26,8 +26,10 @@ export default function PartecipazioneSlugPage({
   const { data: session, status } = useSession({
     required: true,
     onUnauthenticated() {
-      window.location.href =
-        "/login?callbackUrl=" + encodeURIComponent(window.location.pathname);
+      if (typeof window !== "undefined") {
+        window.location.href =
+          "/login?callbackUrl=" + encodeURIComponent(window.location.pathname);
+      }
     },
   });
 
@@ -57,7 +59,7 @@ export default function PartecipazioneSlugPage({
       try {
         setEventLoading(true);
         setEventError(null);
-        const res = await fetch(`${API_BASE_URL}/api/events/form/${slug}`);
+        const res = await apiFetch(`${API_BASE_URL}/api/events/form/${slug}`, {}, session);
         if (!res.ok) {
           throw new Error("Link di partecipazione non valido o assemblea non trovata.");
         }
@@ -70,13 +72,13 @@ export default function PartecipazioneSlugPage({
       }
     }
     fetchEventBySlug();
-  }, [slug]);
+  }, [slug, session]);
 
   // Fetch list of active soci for delegation dropdown, excluding current user
   useEffect(() => {
     async function fetchSoci() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/soci?slug=${encodeURIComponent(slug)}`);
+        const res = await apiFetch(`${API_BASE_URL}/api/soci?slug=${encodeURIComponent(slug)}`, {}, session);
         if (res.ok) {
           const data = await res.json();
           const userEmail = session?.user?.email?.toLowerCase().trim();
@@ -105,7 +107,7 @@ export default function PartecipazioneSlugPage({
     if (session?.user) {
       fetchSoci();
     }
-  }, [session?.user]);
+  }, [session?.user, slug]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,10 +135,10 @@ export default function PartecipazioneSlugPage({
         if (file) formData.append("file", file);
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/events/form/${slug}/delega`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/events/form/${slug}/delega`, {
         method: "POST",
         body: formData,
-      });
+      }, session);
 
       const data = await res.json().catch(() => null);
 
@@ -210,7 +212,7 @@ export default function PartecipazioneSlugPage({
               Modifica risposta / Invia nuova scelta
             </button>
             <p className="text-[11px] text-gray-400 mt-2">
-              Puoi ricompilare il modulo in qualsiasi momento: l&apos;ultima compilazione sovrascrive la precedente.
+              Puoi modificare la risposta entro 30 minuti dalla prima compilazione. Trascorsi 30 minuti, per eventuali modifiche contatta il Segretario Generale (SG).
             </p>
           </div>
         </div>

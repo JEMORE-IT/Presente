@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Search, Filter, ArrowUpDown, AlertCircle, AlertTriangle, CheckCircle, Loader2, Users, FileSpreadsheet, ShieldAlert, Database } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 
 interface MemberAnalytics {
   socio_id: number;
@@ -27,12 +27,15 @@ type SortField = "nome" | "global_attendance_pct" | "assembly_absences";
 type SortOrder = "asc" | "desc";
 
 export default function MemberAnalyticsPage() {
-  const { data: session } = useSession();
-
-  const getAuthHeaders = (): Record<string, string> => {
-    const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
+  const { data: session, status } = useSession({
+    required: true,
+    onUnauthenticated() {
+      if (typeof window !== "undefined") {
+        window.location.href =
+          "/login?callbackUrl=" + encodeURIComponent(window.location.pathname + window.location.search);
+      }
+    },
+  });
 
   const [analytics, setAnalytics] = useState<MemberAnalytics[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,11 +72,10 @@ export default function MemberAnalyticsPage() {
     formData.append("file", file);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/members/import`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/members/import`, {
         method: "POST",
-        headers: getAuthHeaders(),
         body: formData,
-      });
+      }, session);
 
       const data = await res.json();
       if (!res.ok) {
@@ -103,10 +105,9 @@ export default function MemberAnalyticsPage() {
     setImportResult(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/members/sync-postgres`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/members/sync-postgres`, {
         method: "POST",
-        headers: getAuthHeaders(),
-      });
+      }, session);
 
       const data = await res.json();
       if (!res.ok) {
@@ -134,16 +135,16 @@ export default function MemberAnalyticsPage() {
   };
 
   useEffect(() => {
-    fetchAnalytics();
-  }, []);
+    if (session?.user) {
+      fetchAnalytics();
+    }
+  }, [session?.user]);
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch(`${API_BASE_URL}/api/members/analytics`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await apiFetch(`${API_BASE_URL}/api/members/analytics`, {}, session);
       if (!res.ok) throw new Error("Errore durante il recupero dei dati analitici");
       const data = await res.json();
       setAnalytics(data);
@@ -395,6 +396,12 @@ export default function MemberAnalyticsPage() {
                   <tr>
                     <th
                       scope="col"
+                      className="w-12 px-4 py-3 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                    >
+                      No.
+                    </th>
+                    <th
+                      scope="col"
                       onClick={() => handleSort("nome")}
                       className="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800"
                     >
@@ -421,7 +428,7 @@ export default function MemberAnalyticsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-zinc-900 divide-y divide-gray-200 dark:divide-zinc-800 text-sm">
-                  {processedAnalytics.map((member) => (
+                  {processedAnalytics.map((member, idx) => (
                     <tr
                       key={member.socio_id}
                       className={`hover:bg-gray-50 dark:hover:bg-zinc-800/50 ${member.warning_level === "CRITICAL"
@@ -431,6 +438,9 @@ export default function MemberAnalyticsPage() {
                           : ""
                         }`}
                     >
+                      <td className="w-12 px-4 py-4 whitespace-nowrap text-center text-xs font-bold text-gray-400 dark:text-gray-500">
+                        {idx + 1}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className="font-bold text-gray-900 dark:text-white">{member.nome}</span>
