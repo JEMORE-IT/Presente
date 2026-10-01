@@ -1,75 +1,125 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import QRCode from "qrcode";
 import { QrProjectorModalProps } from "./QrProjectorModal.types";
-import { X, Smartphone, Copy, Check } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { X, Smartphone, Copy, Check, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 
 export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
   isOpen,
   onClose,
   eventId,
   eventTitle = "Evento",
+  onQrRegenerated,
 }) => {
   const { data: session } = useSession();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [checkinUrl, setCheckinUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
-  // Build and render QR code whenever modal opens or event changes
+  const renderQrCanvas = useCallback((url: string) => {
+    if (canvasRef.current && url) {
+      QRCode.toCanvas(
+        canvasRef.current,
+        url,
+        {
+          width: 280,
+          margin: 2,
+          color: {
+            dark: "#18181b",
+            light: "#ffffff",
+          },
+        },
+        (err) => {
+          if (err) {
+            console.error("QR Code generation error:", err);
+            setError("Impossibile generare l'immagine QR Code");
+          }
+        }
+      );
+    }
+  }, []);
+
+  // Fetch QR Code data
+  const fetchQrCode = useCallback(async () => {
+    if (!eventId) return;
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/qr`, {}, session);
+      if (res.ok) {
+        const data = await res.json();
+        const origin =
+          typeof window !== "undefined"
+            ? window.location.origin
+            : "https://presente.jemore.it";
+        const code = data.daily_code || data.token || data.static_token;
+        const url = `${origin}/checkin/${code}`;
+        setCheckinUrl(url);
+        setError("");
+        renderQrCanvas(url);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.detail || "Errore nel recupero del token evento");
+      }
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Errore di connessione al server");
+    }
+  }, [eventId, session, renderQrCanvas]);
+
   useEffect(() => {
     if (!isOpen || !eventId) {
       setCheckinUrl("");
+      setShowConfirmReset(false);
+      setSuccessMessage("");
       return;
     }
 
-    const generateUrl = async () => {
-      try {
-        const token = (session as any)?.idToken || (session as any)?.accessToken || session?.user?.email || "";
-        const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/qr`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const origin =
-            typeof window !== "undefined"
-              ? window.location.origin
-              : "http://localhost:3000";
-          const code = data.daily_code || data.token || data.static_token;
-          const url = `${origin}/checkin/${code}`;
-          setCheckinUrl(url);
-          setError("");
+    fetchQrCode();
+  }, [isOpen, eventId, fetchQrCode]);
 
-          if (canvasRef.current) {
-            QRCode.toCanvas(
-              canvasRef.current,
-              url,
-              {
-                width: 280,
-                margin: 2,
-                color: {
-                  dark: "#18181b",
-                  light: "#ffffff",
-                },
-              },
-              (err) => {
-                if (err) {
-                  console.error("QR Code generation error:", err);
-                  setError("Impossibile generare l'immagine QR Code");
-                }
-              }
-            );
-          }
-        }
-      } catch (e) {
-        console.error(e);
-        setError("Errore nel recupero del token evento");
+  // Handle QR Regeneration & Reset Records
+  const handleRegenerateQr = async () => {
+    if (!eventId) return;
+    setIsRegenerating(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/api/events/${eventId}/regenerate-qr`, {
+        method: "POST",
+      }, session);
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Errore durante la rigenerazione del QR Code");
       }
-    };
-    generateUrl();
 
-  }, [isOpen, eventId]);
+      const data = await res.json();
+      const origin =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "https://presente.jemore.it";
+      const code = data.daily_code || data.token || data.static_token;
+      const url = `${origin}/checkin/${code}`;
+      setCheckinUrl(url);
+      renderQrCanvas(url);
+      setShowConfirmReset(false);
+      setSuccessMessage("Nuovo QR Code attivo! Presenze precedenti azzerate con successo.");
+      setTimeout(() => setSuccessMessage(""), 5000);
+
+      if (onQrRegenerated) {
+        onQrRegenerated();
+      }
+    } catch (err: any) {
+      setError(err.message || "Impossibile rigenerare il QR Code.");
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const handleCopy = async () => {
     try {
@@ -84,68 +134,122 @@ export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs">
-      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col mx-4">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50">
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-950/80">
           <div>
-            <h2 className="text-lg font-bold text-[#1f295c] dark:text-white">
+            <h2 className="text-lg font-bold text-white">
               Proietta QR Code
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
+            <p className="text-xs text-zinc-400 mt-0.5 font-medium truncate max-w-[280px]">
               {eventTitle}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+            className="text-zinc-400 hover:text-white transition-colors p-1 cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* QR Content */}
-        <div className="p-6 flex flex-col items-center gap-5 bg-white dark:bg-zinc-900">
-          {error ? (
-            <div className="text-center py-6">
-              <p className="text-red-500 text-sm font-semibold">{error}</p>
+        <div className="p-6 flex flex-col items-center gap-4 bg-zinc-900">
+          {error && (
+            <div className="w-full text-center py-2.5 px-3 bg-red-950/60 border border-red-800/60 rounded-xl text-red-300 text-xs font-semibold">
+              {error}
             </div>
-          ) : (
-            <>
-              {/* QR Canvas */}
-              <div className="bg-white p-4 rounded-xl border border-gray-100 dark:border-zinc-700 shadow-md">
-                <canvas ref={canvasRef} />
-              </div>
-
-              {/* Instruction */}
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 font-medium text-center">
-                <Smartphone className="h-4 w-4 shrink-0 text-blue-500 dark:text-blue-400" />
-                Inquadra il QR con lo smartphone, seleziona il tuo nome e conferma la presenza.
-              </div>
-
-              {/* URL copy row */}
-              <div className="w-full flex items-center gap-2 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-lg px-3 py-2">
-                <span className="flex-1 text-xs font-mono text-gray-500 dark:text-gray-400 truncate">
-                  {checkinUrl}
-                </span>
-                <button
-                  onClick={handleCopy}
-                  title="Copia link"
-                  className="shrink-0 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </>
           )}
+
+          {successMessage && (
+            <div className="w-full text-center py-2.5 px-3 bg-emerald-950/60 border border-emerald-800/60 rounded-xl text-emerald-300 text-xs font-semibold animate-in fade-in">
+              {successMessage}
+            </div>
+          )}
+
+          {/* QR Canvas */}
+          <div className="bg-white p-4 rounded-2xl border border-zinc-700 shadow-xl">
+            <canvas ref={canvasRef} />
+          </div>
+
+          {/* Instruction */}
+          <div className="flex items-center gap-2 text-xs sm:text-sm text-zinc-300 font-medium text-center">
+            <Smartphone className="h-4 w-4 shrink-0 text-blue-400" />
+            Inquadra il QR con lo smartphone, seleziona il tuo nome e conferma la presenza.
+          </div>
+
+          {/* URL copy row */}
+          <div className="w-full flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5">
+            <span className="flex-1 text-xs font-mono text-zinc-400 truncate">
+              {checkinUrl}
+            </span>
+            <button
+              onClick={handleCopy}
+              title="Copia link"
+              className="shrink-0 text-zinc-400 hover:text-blue-400 transition-colors cursor-pointer"
+            >
+              {copied ? (
+                <Check className="h-4 w-4 text-emerald-400" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+
+          {/* Regenerate QR Code / Reset Presenze Section */}
+          <div className="w-full pt-1">
+            {showConfirmReset ? (
+              <div className="p-3.5 bg-amber-950/40 border border-amber-800/60 rounded-2xl space-y-2.5 text-center animate-in fade-in">
+                <div className="flex items-center justify-center gap-1.5 text-amber-300 text-xs font-bold">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  Confermi la rigenerazione?
+                </div>
+                <p className="text-[11px] text-zinc-300 leading-relaxed">
+                  Verrà generato un <strong>nuovo QR Code</strong> e verranno <strong>azzerate tutte le presenze</strong> registrate per questo evento, consentendo una nuova compilazione da zero a tutti i soci.
+                </p>
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={isRegenerating}
+                    onClick={() => setShowConfirmReset(false)}
+                    className="px-3 py-1.5 text-xs font-bold rounded-xl border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 cursor-pointer"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isRegenerating}
+                    onClick={handleRegenerateQr}
+                    className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-500 text-white shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {isRegenerating ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Rigenerazione...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5" /> Sì, Rigenera & Azzera
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowConfirmReset(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-400 hover:text-amber-300 text-xs font-semibold transition-all cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Genera Nuovo QR Code & Azzera Presenze
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50 text-center text-xs text-gray-400 dark:text-gray-500">
+        <div className="p-4 border-t border-zinc-800 bg-zinc-950 text-center text-xs text-zinc-500">
           Il link è permanente per questo evento. La presenza viene registrata al momento della conferma.
         </div>
       </div>

@@ -33,6 +33,7 @@ class Evento(Base):
     form_slug = Column(String, unique=True, index=True, nullable=True)
     luogo = Column(String, nullable=True)
     tipo_assemblea = Column(String, nullable=True)  # "CAMBIO_RESP", "CAMBIO_BOARD", "STRATEGIA_BILANCIO"
+    qr_code_version = Column(Integer, default=1, nullable=False)
 
     # Relationships
     presenze = relationship("Presenza", back_populates="evento", cascade="all, delete-orphan")

@@ -772,6 +772,11 @@ export default function Dashboard() {
           onClose={() => setIsQrOpen(false)}
           eventId={selectedEventId}
           eventTitle={selectedEvent.titolo}
+          onQrRegenerated={() => {
+            if (selectedEventId) {
+              fetchEventRoster(selectedEventId);
+            }
+          }}
         />
       )}
 

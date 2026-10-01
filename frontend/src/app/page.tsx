@@ -191,14 +191,8 @@ export default function EventArchive() {
     try {
       setCreating(true);
       
-      let eventIso = new Date().toISOString();
-      if (newDate) {
-        const timePart = newTime && newTime.trim() ? newTime : "18:30";
-        const combined = new Date(`${newDate}T${timePart}:00`);
-        if (!isNaN(combined.getTime())) {
-          eventIso = combined.toISOString();
-        }
-      }
+      const timePart = newTime && newTime.trim() ? newTime.trim() : "18:30";
+      const eventIso = newDate ? `${newDate}T${timePart}:00` : new Date().toISOString();
 
       const res = await apiFetch(`${API_BASE_URL}/api/events`, {
         method: "POST",

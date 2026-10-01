@@ -3,4 +3,5 @@ export interface QrProjectorModalProps {
   onClose: () => void;
   eventId: number | null;
   eventTitle?: string;
+  onQrRegenerated?: () => void;
 }

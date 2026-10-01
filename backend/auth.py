@@ -49,18 +49,28 @@ async def get_microsoft_jwks() -> list:
         # Return whatever is in cache if fetch fails
         return jwks_cache["keys"]
 
-def generate_static_qr_token(event_id: int) -> str:
+def generate_static_qr_token(event_id: int, qr_version: int = 1) -> str:
     """
-    Generates a stateless, permanent QR code token for a given event,
+    Generates a stateless, permanent QR code token for a given event and version,
     so users cannot guess the URL for other events.
     """
-    message = f"event_static:{event_id}".encode("utf-8")
+    if qr_version > 1:
+        message = f"event_static:{event_id}:v{qr_version}".encode("utf-8")
+    else:
+        message = f"event_static:{event_id}".encode("utf-8")
     token = hmac.new(QR_SECRET_KEY, message, hashlib.sha256).hexdigest()[:16]
     return token
 
-def verify_static_qr_token(event_id: int, token_to_verify: str) -> bool:
-    expected = generate_static_qr_token(event_id)
-    return hmac.compare_digest(expected, token_to_verify)
+def verify_static_qr_token(event_id: int, token_to_verify: str, qr_version: int = 1) -> bool:
+    expected = generate_static_qr_token(event_id, qr_version)
+    if hmac.compare_digest(expected, token_to_verify):
+        return True
+    if qr_version == 1:
+        legacy_msg = f"event_static:{event_id}".encode("utf-8")
+        legacy_expected = hmac.new(QR_SECRET_KEY, legacy_msg, hashlib.sha256).hexdigest()[:16]
+        if hmac.compare_digest(legacy_expected, token_to_verify):
+            return True
+    return False
 
 def generate_qr_token(event_id: int, timestamp: float = None) -> tuple[str, int]:
     """
@@ -107,7 +117,7 @@ def generate_form_slug(event_id: int) -> str:
     slug = hmac.new(QR_SECRET_KEY, message, hashlib.sha256).hexdigest()[:8]
     return slug
 
-def generate_daily_qr_code(event_id: int, timestamp: float = None) -> str:
+def generate_daily_qr_code(event_id: int, qr_version: int = 1, timestamp: float = None) -> str:
     """
     Generates a daily rotating QR code (valid for 24 hours).
     Format: "{event_id}-{sig}" with no eventId segment in the path: /checkin/{code}.
@@ -115,11 +125,14 @@ def generate_daily_qr_code(event_id: int, timestamp: float = None) -> str:
     if timestamp is None:
         timestamp = time.time()
     day_window = int(timestamp // 86400)
-    message = f"event_daily:{event_id}:{day_window}".encode("utf-8")
+    if qr_version > 1:
+        message = f"event_daily:{event_id}:v{qr_version}:{day_window}".encode("utf-8")
+    else:
+        message = f"event_daily:{event_id}:{day_window}".encode("utf-8")
     sig = hmac.new(QR_SECRET_KEY, message, hashlib.sha256).hexdigest()[:12]
     return f"{event_id}-{sig}"
 
-def verify_daily_qr_code(code: str) -> tuple[bool, int | None]:
+def verify_daily_qr_code(code: str, qr_version: int = 1) -> tuple[bool, int | None]:
     """
     Verifies daily QR code and returns (is_valid, event_id).
     Checks current 24h day window and previous day window (tolerance for midnight events).
@@ -136,10 +149,16 @@ def verify_daily_qr_code(code: str) -> tuple[bool, int | None]:
     now = time.time()
     current_day = int(now // 86400)
     for day in [current_day, current_day - 1]:
-        message = f"event_daily:{event_id}:{day}".encode("utf-8")
-        expected_sig = hmac.new(QR_SECRET_KEY, message, hashlib.sha256).hexdigest()[:12]
-        if hmac.compare_digest(expected_sig, token_to_verify):
-            return True, event_id
+        if qr_version > 1:
+            message = f"event_daily:{event_id}:v{qr_version}:{day}".encode("utf-8")
+            expected_sig = hmac.new(QR_SECRET_KEY, message, hashlib.sha256).hexdigest()[:12]
+            if hmac.compare_digest(expected_sig, token_to_verify):
+                return True, event_id
+        else:
+            message = f"event_daily:{event_id}:{day}".encode("utf-8")
+            expected_sig = hmac.new(QR_SECRET_KEY, message, hashlib.sha256).hexdigest()[:12]
+            if hmac.compare_digest(expected_sig, token_to_verify):
+                return True, event_id
 
     return False, None
 

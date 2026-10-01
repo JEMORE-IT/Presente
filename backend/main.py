@@ -47,6 +47,11 @@ def init_db():
                     conn.commit()
                 except Exception:
                     pass
+            try:
+                conn.execute(text("ALTER TABLE eventi ADD COLUMN qr_code_version INTEGER DEFAULT 1"))
+                conn.commit()
+            except Exception:
+                pass
         seed_database_if_empty()
         ensure_event_slugs()
     except Exception as e:
@@ -147,6 +152,7 @@ class EventResponse(BaseModel):
     form_slug: Optional[str] = None
     luogo: Optional[str] = None
     tipo_assemblea: Optional[str] = None
+    qr_code_version: Optional[int] = 1
 
     class Config:
         from_attributes = True
@@ -282,7 +288,8 @@ def get_event_qr(
         event.form_slug = generate_form_slug(event.id)
         db.commit()
 
-    daily_code = generate_daily_qr_code(event_id)
+    qr_version = getattr(event, "qr_code_version", 1) or 1
+    daily_code = generate_daily_qr_code(event_id, qr_version=qr_version)
     token, window_id = generate_qr_token(event_id)
     
     from auth import generate_static_qr_token
@@ -291,7 +298,57 @@ def get_event_qr(
         "daily_code": daily_code,
         "token": daily_code,
         "form_slug": event.form_slug,
-        "static_token": generate_static_qr_token(event_id)
+        "qr_code_version": qr_version,
+        "static_token": generate_static_qr_token(event_id, qr_version=qr_version)
+    }
+
+@app.post("/api/events/{event_id}/regenerate-qr")
+async def regenerate_event_qr(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_or_it_manager)
+):
+    """
+    Regenerates a new QR code for the event and deletes/resets previous attendance records,
+    allowing all members to check in again from scratch.
+    Restricted to Board and IT Manager.
+    """
+    event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento non trovato")
+    if not event.is_attivo:
+        raise HTTPException(status_code=400, detail="L'evento non è attivo")
+
+    # Increment QR version
+    current_v = getattr(event, "qr_code_version", 1) or 1
+    event.qr_code_version = current_v + 1
+
+    # Delete all previous presenze for this event
+    deleted_presenze = db.query(models.Presenza).filter(models.Presenza.evento_id == event_id).delete()
+    db.commit()
+    db.refresh(event)
+
+    # Broadcast QR reset & roster update over SSE
+    await broadcast_to_sse("ROSTER_UPDATED", {"event_id": event_id, "action": "RESET_ALL"})
+    await broadcast_to_sse("QR_REGENERATED", {
+        "event_id": event_id,
+        "qr_version": event.qr_code_version,
+        "deleted_count": deleted_presenze
+    })
+
+    from auth import generate_daily_qr_code, generate_static_qr_token
+    daily_code = generate_daily_qr_code(event_id, qr_version=event.qr_code_version)
+    static_token = generate_static_qr_token(event_id, qr_version=event.qr_code_version)
+
+    return {
+        "event_id": event_id,
+        "daily_code": daily_code,
+        "token": daily_code,
+        "form_slug": event.form_slug,
+        "qr_code_version": event.qr_code_version,
+        "static_token": static_token,
+        "deleted_count": deleted_presenze,
+        "message": "Nuovo QR Code generato con successo. Tutte le presenze precedenti sono state azzerate."
     }
 
 @app.get("/api/checkin/qr/{code}")
@@ -299,27 +356,39 @@ def get_checkin_event_by_qr_code(code: str, db: Session = Depends(get_db)):
     """
     Resolves event information from a 24-hour QR code slug (e.g. /checkin/1-7f3b89a2).
     """
-    is_valid, event_id = verify_daily_qr_code(code)
-    
-    # Fallback check if code is static token format: "{event_id}-{static_token}"
-    if not is_valid or not event_id:
-        try:
-            from auth import verify_static_qr_token
-            parts = code.split("-")
-            if len(parts) == 2 and verify_static_qr_token(int(parts[0]), parts[1]):
-                is_valid = True
-                event_id = int(parts[0])
-        except Exception:
-            pass
+    event_id = None
+    try:
+        parts = code.split("-")
+        if len(parts) >= 2:
+            event_id = int(parts[0])
+    except Exception:
+        pass
 
-    if not is_valid or not event_id:
-        raise HTTPException(status_code=404, detail="Codice QR non valido o scaduto (validità 24 ore)")
+    if not event_id:
+        raise HTTPException(status_code=404, detail="Codice QR non valido")
 
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Evento non trovato")
     if not event.is_attivo:
         raise HTTPException(status_code=400, detail="L'evento non è più attivo")
+
+    qr_version = getattr(event, "qr_code_version", 1) or 1
+    is_valid, verified_id = verify_daily_qr_code(code, qr_version=qr_version)
+    
+    # Fallback check if code is static token format: "{event_id}-{static_token}"
+    if not is_valid or not verified_id:
+        try:
+            from auth import verify_static_qr_token
+            parts = code.split("-")
+            if len(parts) == 2 and verify_static_qr_token(int(parts[0]), parts[1], qr_version=qr_version):
+                is_valid = True
+                verified_id = int(parts[0])
+        except Exception:
+            pass
+
+    if not is_valid or not verified_id:
+        raise HTTPException(status_code=404, detail="Codice QR non valido o scaduto (validità 24 ore)")
 
     return {
         "event_id": event.id,
@@ -430,12 +499,27 @@ async def checkin(payload: CheckinPayload, db: Session = Depends(get_db), curren
 
     # If code is provided (from /checkin/[code]), verify daily 24h code
     if payload.code:
-        is_valid, verified_id = verify_daily_qr_code(payload.code)
+        try:
+            parts = payload.code.split("-")
+            if len(parts) >= 2:
+                event_id = int(parts[0])
+        except Exception:
+            pass
+
+        if not event_id:
+            raise HTTPException(status_code=400, detail="Codice QR non valido")
+
+        event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
+        if not event:
+            raise HTTPException(status_code=404, detail="Evento non trovato")
+
+        qr_version = getattr(event, "qr_code_version", 1) or 1
+        is_valid, verified_id = verify_daily_qr_code(payload.code, qr_version=qr_version)
         if not is_valid or not verified_id:
             try:
                 from auth import verify_static_qr_token
                 parts = payload.code.split("-")
-                if len(parts) == 2 and verify_static_qr_token(int(parts[0]), parts[1]):
+                if len(parts) == 2 and verify_static_qr_token(int(parts[0]), parts[1], qr_version=qr_version):
                     is_valid = True
                     verified_id = int(parts[0])
             except Exception:
@@ -445,8 +529,12 @@ async def checkin(payload: CheckinPayload, db: Session = Depends(get_db), curren
             raise HTTPException(status_code=403, detail="Codice QR non valido o scaduto (validità 24 ore)")
         event_id = verified_id
     elif payload.token and event_id:
+        event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
+        if not event:
+            raise HTTPException(status_code=404, detail="Evento non trovato")
+        qr_version = getattr(event, "qr_code_version", 1) or 1
         from auth import verify_static_qr_token
-        if not verify_static_qr_token(event_id, payload.token):
+        if not verify_static_qr_token(event_id, payload.token, qr_version=qr_version):
             raise HTTPException(status_code=403, detail="Token QR Code non valido o mancante.")
     elif not event_id:
         raise HTTPException(status_code=400, detail="Codice QR o ID Evento mancante.")
