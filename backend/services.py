@@ -39,7 +39,8 @@ def checkin_member(
         
         if presence:
             # 30-minute presence modification lock for regular users
-            if not is_admin and presence.registrato_il:
+            # The lock only applies if the member had already confirmed live presence (IN_PRESENZA or ONLINE)
+            if not is_admin and presence.modalita in ["IN_PRESENZA", "ONLINE"] and presence.registrato_il:
                 import datetime
                 now_utc = datetime.datetime.utcnow()
                 reg_time = presence.registrato_il
@@ -70,6 +71,11 @@ def checkin_member(
                         detail=f"Il delegato '{delega_a}' ha già raggiunto il massimo di {MAX_DELEGHE} deleghe per questo evento."
                     )
 
+            # If transitioning to active presence for the first time or after reset, update registrato_il
+            if modalita in ["IN_PRESENZA", "ONLINE"] and presence.modalita not in ["IN_PRESENZA", "ONLINE"]:
+                import datetime
+                presence.registrato_il = datetime.datetime.utcnow()
+
             presence.modalita = modalita
             presence.durata_minuti = max(presence.durata_minuti, durata_minuti)
             if modalita != "GIUSTIFICATO":
@@ -79,8 +85,6 @@ def checkin_member(
                 
             if intolleranze is not None:
                 presence.intolleranze = intolleranze
-            
-            # Keep original registrato_il so the 30-min window counts from initial registration
         else:
             # --- Max 3 deleghe per delegato validation ---
             if delega_a:

@@ -309,8 +309,9 @@ async def regenerate_event_qr(
     current_user: dict = Depends(require_admin_or_it_manager)
 ):
     """
-    Regenerates a new QR code for the event and deletes/resets previous attendance records,
-    allowing all members to check in again from scratch.
+    Regenerates a new QR code for the event and reverts checked-in members
+    back to their initial pre-checkin state (PRE_REGISTRATO if pre-registered, or ASSENTE),
+    allowing all members to check in again from scratch with the new QR code.
     Restricted to Board and IT Manager.
     """
     event = db.query(models.Evento).filter(models.Evento.id == event_id).first()
@@ -323,17 +324,28 @@ async def regenerate_event_qr(
     current_v = getattr(event, "qr_code_version", 1) or 1
     event.qr_code_version = current_v + 1
 
-    # Delete all previous presenze for this event
-    deleted_presenze = db.query(models.Presenza).filter(models.Presenza.evento_id == event_id).delete()
+    # Revert all active check-ins back to their initial state (PRE_REGISTRATO or ASSENTE)
+    presenze = db.query(models.Presenza).filter(models.Presenza.evento_id == event_id).all()
+    reset_count = 0
+    for p in presenze:
+        if p.modalita in ["IN_PRESENZA", "ONLINE"]:
+            reset_count += 1
+            if getattr(p, "is_preregistrato", False):
+                p.modalita = "PRE_REGISTRATO"
+            else:
+                p.modalita = "ASSENTE"
+            p.durata_minuti = 0
+            p.registrato_il = datetime.utcnow()
+
     db.commit()
     db.refresh(event)
 
     # Broadcast QR reset & roster update over SSE
-    await broadcast_to_sse("ROSTER_UPDATED", {"event_id": event_id, "action": "RESET_ALL"})
+    await broadcast_to_sse("ROSTER_UPDATED", {"event_id": event_id, "action": "REVERT_TO_INITIAL"})
     await broadcast_to_sse("QR_REGENERATED", {
         "event_id": event_id,
         "qr_version": event.qr_code_version,
-        "deleted_count": deleted_presenze
+        "reverted_count": reset_count
     })
 
     from auth import generate_daily_qr_code, generate_static_qr_token
@@ -347,8 +359,8 @@ async def regenerate_event_qr(
         "form_slug": event.form_slug,
         "qr_code_version": event.qr_code_version,
         "static_token": static_token,
-        "deleted_count": deleted_presenze,
-        "message": "Nuovo QR Code generato con successo. Tutte le presenze precedenti sono state azzerate."
+        "reverted_count": reset_count,
+        "message": "Nuovo QR Code generato con successo. Tutti i soci sono stati riportati allo stato iniziale (pre-registrato / assente)."
     }
 
 @app.get("/api/checkin/qr/{code}")

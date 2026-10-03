@@ -197,16 +197,16 @@ export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
             </button>
           </div>
 
-          {/* Regenerate QR Code / Reset Presenze Section */}
+          {/* Regenerate QR Code / Revert Presenze Section */}
           <div className="w-full pt-1">
             {showConfirmReset ? (
               <div className="p-3.5 bg-amber-950/40 border border-amber-800/60 rounded-2xl space-y-2.5 text-center animate-in fade-in">
                 <div className="flex items-center justify-center gap-1.5 text-amber-300 text-xs font-bold">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                  Confermi la rigenerazione?
+                  Confermi la rigenerazione del QR?
                 </div>
                 <p className="text-[11px] text-zinc-300 leading-relaxed">
-                  Verrà generato un <strong>nuovo QR Code</strong> e verranno <strong>azzerate tutte le presenze</strong> registrate per questo evento, consentendo una nuova compilazione da zero a tutti i soci.
+                  Verrà generato un <strong>nuovo QR Code</strong> e tutti i soci torneranno al loro <strong>stato iniziale</strong> (chi era pre-registrato o assente torna a pre-registrato/assente), consentendo a tutti di effettuare nuovamente il check-in.
                 </p>
                 <div className="flex items-center justify-center gap-2 pt-1">
                   <button
@@ -229,7 +229,7 @@ export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
                       </>
                     ) : (
                       <>
-                        <RotateCcw className="w-3.5 h-3.5" /> Sì, Rigenera & Azzera
+                        <RotateCcw className="w-3.5 h-3.5" /> Sì, Rigenera & Reimposta
                       </>
                     )}
                   </button>
@@ -242,7 +242,7 @@ export const QrProjectorModal: React.FC<QrProjectorModalProps> = ({
                 className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-zinc-800 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-400 hover:text-amber-300 text-xs font-semibold transition-all cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Genera Nuovo QR Code & Azzera Presenze
+                Genera Nuovo QR Code & Reimposta Presenze
               </button>
             )}
           </div>
